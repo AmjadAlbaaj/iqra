@@ -1,0 +1,10 @@
+[
+  "tests/test_interpreter.py::test_number_literal",
+  "tests/test_interpreter.py::test_print_output",
+  "tests/test_interpreter.py::test_variable_assignment_and_reference",
+  "tests/test_stdlib.py::test_date_today_and_now",
+  "tests/test_stdlib.py::test_files_read_write",
+  "tests/test_stdlib.py::test_text_join_and_split",
+  "tests/test_vm.py::test_vm_push_and_pop",
+  "tests/test_vm.py::test_vm_unknown_instruction"
+]
