@@ -1,0 +1,10 @@
+# القوائم و الخرائط - Collections
+
+l = list(1,2,3);
+اطبع list_len(l);
+اطبع get(l, 0);
+
+m = dict('a', 1, 'b', 2);
+اطبع map_get(m, 'a');
+m2 = map_set(m, 'c', 3);
+اطبع map_get(m2, 'c');

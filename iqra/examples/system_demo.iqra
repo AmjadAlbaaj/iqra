@@ -1,0 +1,10 @@
+# System demo (use with caution)
+
+# هذا المثال يستدعي أمر نظامي — شغّله فقط عندما تعلم أن البيئة آمنة.
+# shell fallback يحتاج تفعيل IQRA_ALLOW_SHELL_FALLBACK لتجنب حظر التنفيذ.
+
+اطبع "Running uname -a (if allowed):";
+# system('uname -a');
+
+# الآمن: استدعاء builtins بدون تنفيذ النظام
+اطبع "done";
