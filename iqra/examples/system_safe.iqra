@@ -1,0 +1,3 @@
+# مثال يوضح استدعاء system الآمن عبر محاكٍ (mock) في الاختبارات.
+# لا تشغّل هذا السكربت مع IQRA_ALLOW_SHELL_FALLBACK مفعّل على بيئة عامة.
+اطبع "system demo - this is safe when tested with a mock executor"
