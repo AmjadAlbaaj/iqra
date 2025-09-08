@@ -1,29 +1,12 @@
 # iqra
 
 ![CI](https://github.com/USERNAME/iqra/actions/workflows/ci.yml/badge.svg)
-
-مشروع Rust نموذجي بهيكل احترافي مبدئي.
-
-## دليل سريع للمستخدم | Quick Start Guide
-
-## المتطلبات
-
-- تثبيت Rust: https://rustup.rs
-
-## تشغيل اقرأ
-
-```powershell
-cargo run -- repl
-```
-
-## أوامر مطوّر سريعة
-
-PowerShell (Windows):
 # iqra
 
-![CI](https://github.com/USERNAME/iqra/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/AmjadAlbaaj/iqra/actions/workflows/ci.yml/badge.svg)
+![Coverage](https://github.com/AmjadAlbaaj/iqra/actions/workflows/coverage.yml/badge.svg)
 
-Iqra — a small Arabic-first scripting language and interpreter written in Rust.
+مشروع Rust بسيط يركّز على العربية — مفسّر صغير ولغة سكربتات.
 
 ## Quick start / دليل سريع
 
@@ -99,7 +82,6 @@ cargo test --all --verbose
 ---
 
 For more examples and the full list of built-ins, see the `tests/` directory and source code in `src/lang/`.
-    cargo fmt --all
 
 ## Testing / Mocking system calls
 
@@ -142,3 +124,4 @@ Run the tests as usual:
 ```powershell
 cargo test --all
 ```
+Note: The older global setter API (`set_global_executor`) has been removed; prefer
