@@ -1,8 +1,5 @@
 # iqra
 
-![CI](https://github.com/USERNAME/iqra/actions/workflows/ci.yml/badge.svg)
-# iqra
-
 ![CI](https://github.com/AmjadAlbaaj/iqra/actions/workflows/ci.yml/badge.svg)
 ![Coverage](https://github.com/AmjadAlbaaj/iqra/actions/workflows/coverage.yml/badge.svg)
 
@@ -124,4 +121,3 @@ Run the tests as usual:
 ```powershell
 cargo test --all
 ```
-Note: The older global setter API (`set_global_executor`) has been removed; prefer
