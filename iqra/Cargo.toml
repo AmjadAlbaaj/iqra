@@ -9,7 +9,7 @@ repository = "https://github.com/AmjadAlbaaj/iqra.git"
 homepage = "https://github.com/AmjadAlbaaj/iqra.git"
 keywords = ["arabic", "language", "interpreter", "scripting"]
 categories = ["language-tools", "parsers"]
-authors = ["USERNAME <you@example.com>"]
+authors = ["Albaaj <arjeic85@gmail.com>"]
 
 [dependencies]
 rand = "0.8"
