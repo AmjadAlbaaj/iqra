@@ -33,7 +33,9 @@ fn mock_system_exec_ok() {
 #[test]
 fn mock_system_with_io_ok() {
     let mut rt = Runtime::new_with_executor(Box::new(MockExec));
-    let res = rt.call_builtin("system_with_io", &[Value::Str("cat".into()), Value::Str("input".into())]).unwrap();
+    let res = rt
+        .call_builtin("system_with_io", &[Value::Str("cat".into()), Value::Str("input".into())])
+        .unwrap();
     assert_eq!(res, Value::Str("input".into()));
 }
 

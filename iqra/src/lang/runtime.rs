@@ -262,7 +262,7 @@ impl SystemExecutor for DefaultSystemExecutor {
     fn exec(&self, cmd: &str) -> std::io::Result<String> {
         // Parse the command into program + args while respecting quotes.
         let parts = split_command(cmd);
-    let prog = parts.first().ok_or_else(|| {
+        let prog = parts.first().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "empty command")
         })?;
         let args: Vec<&str> = parts.iter().skip(1).map(|s| s.as_str()).collect();
@@ -284,7 +284,7 @@ impl SystemExecutor for DefaultSystemExecutor {
 
     fn exec_with_io(&self, cmd: &str, input: &str) -> std::io::Result<String> {
         let parts = split_command(cmd);
-    let prog = parts.first().ok_or_else(|| {
+        let prog = parts.first().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "empty command")
         })?;
         let args: Vec<&str> = parts.iter().skip(1).map(|s| s.as_str()).collect();
