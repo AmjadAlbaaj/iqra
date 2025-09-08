@@ -1,4 +1,5 @@
-## Summary / ملخص
+
+# Pull Request / ملخص الطلب
 
 Provide a short description of the change and why it is needed.
 
@@ -7,6 +8,7 @@ Provide a short description of the change and why it is needed.
 ---
 
 ## Checklist / قائمة التحقق
+
 - [ ] I ran formatting (rustfmt) and clippy locally.
 - [ ] Tests pass locally (cargo test --all).
 - [ ] Security checks (cargo-audit) were executed.
@@ -16,6 +18,7 @@ Provide a short description of the change and why it is needed.
 ## Notes / ملاحظات
 
 Add any special notes for the reviewer, platform constraints, or testing instructions.
+
 <!-- Describe the change you are making and why. -->
 
 - [ ] I have read the contributing guidelines

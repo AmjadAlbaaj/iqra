@@ -1,0 +1,18 @@
+# Ignore editor and tool caches
+.vscode/
+.idea/
+
+# Ignore codestream agent artifacts
+.codestream/
+
+# Ignore docker sockets and runtime files that broke git add on Windows
+.docker/
+.docker/**
+*.sock
+
+# Target and build artifacts
+target/
+
+# OS files
+Thumbs.db
+.DS_Store
