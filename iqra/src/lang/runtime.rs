@@ -250,6 +250,69 @@ fn split_command(cmd: &str) -> Vec<String> {
     args
 }
 
+// Control whether the executor is allowed to fall back to invoking the platform shell
+// when a program is not found. Default: disabled. Enable by setting the
+// environment variable `IQRA_ALLOW_SHELL_FALLBACK=1` or `true`/`yes`.
+fn allow_shell_fallback() -> bool {
+    match env::var("IQRA_ALLOW_SHELL_FALLBACK") {
+        Ok(v) => {
+            let v = v.to_ascii_lowercase();
+            v == "1" || v == "true" || v == "yes"
+        }
+        Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod internal_tests {
+    use super::*;
+    use std::env;
+
+    // Helper to temporarily set an env var and restore it after the closure runs.
+    fn with_env_var<F: FnOnce() -> R, R>(key: &str, val: &str, f: F) -> R {
+        let prev = env::var_os(key);
+        unsafe {
+            env::set_var(key, val);
+        }
+        let res = f();
+        match prev {
+            Some(v) => unsafe {
+                env::set_var(key, v.to_string_lossy().as_ref());
+            },
+            None => unsafe {
+                env::remove_var(key);
+            },
+        }
+        res
+    }
+
+    #[test]
+    fn allow_shell_fallback_default_false() {
+        with_env_var("IQRA_ALLOW_SHELL_FALLBACK", "0", || {
+            assert!(!allow_shell_fallback());
+        });
+    }
+
+    #[test]
+    fn allow_shell_fallback_true_when_set() {
+        with_env_var("IQRA_ALLOW_SHELL_FALLBACK", "true", || {
+            assert!(allow_shell_fallback());
+        });
+    }
+
+    #[test]
+    fn exec_nonexistent_without_fallback_returns_err() {
+        with_env_var("IQRA_ALLOW_SHELL_FALLBACK", "0", || {
+            let exe = DefaultSystemExecutor;
+            let res = exe.exec("__iqra_definitely_not_a_command__");
+            assert!(res.is_err());
+            if let Err(e) = res {
+                assert_eq!(e.kind(), std::io::ErrorKind::NotFound);
+            }
+        });
+    }
+}
+
 /// Abstraction around executing system commands so we can mock it in tests
 pub trait SystemExecutor: Send + Sync + 'static {
     fn exec(&self, cmd: &str) -> std::io::Result<String>;
@@ -271,12 +334,17 @@ impl SystemExecutor for DefaultSystemExecutor {
             Ok(out) => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // Some commands (like `dir` on Windows) are shell builtins. Fall back to
-                // invoking the platform shell only when the program isn't found.
-                #[cfg(windows)]
-                let out = Command::new("cmd").args(["/C", cmd]).output()?;
-                #[cfg(not(windows))]
-                let out = Command::new("sh").arg("-c").arg(cmd).output()?;
-                Ok(String::from_utf8_lossy(&out.stdout).to_string())
+                // invoking the platform shell only when the program isn't found and the
+                // runtime is configured to allow such fallback (via env var).
+                if allow_shell_fallback() {
+                    #[cfg(windows)]
+                    let out = Command::new("cmd").args(["/C", cmd]).output()?;
+                    #[cfg(not(windows))]
+                    let out = Command::new("sh").arg("-c").arg(cmd).output()?;
+                    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+                } else {
+                    Err(e)
+                }
             }
             Err(e) => Err(e),
         }
@@ -303,28 +371,39 @@ impl SystemExecutor for DefaultSystemExecutor {
                 Ok(String::from_utf8_lossy(&out.stdout).to_string())
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                #[cfg(windows)]
-                let mut child = Command::new("cmd")
-                    .args(["/C", cmd])
-                    .stdin(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .spawn()?;
-                #[cfg(not(windows))]
-                let mut child = Command::new("sh")
-                    .arg("-c")
-                    .arg(cmd)
-                    .stdin(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .spawn()?;
-                if let Some(stdin) = child.stdin.as_mut() {
-                    stdin.write_all(input.as_bytes())?;
+                if allow_shell_fallback() {
+                    #[cfg(windows)]
+                    let mut child = Command::new("cmd")
+                        .args(["/C", cmd])
+                        .stdin(std::process::Stdio::piped())
+                        .stdout(std::process::Stdio::piped())
+                        .spawn()?;
+                    #[cfg(not(windows))]
+                    let mut child = Command::new("sh")
+                        .arg("-c")
+                        .arg(cmd)
+                        .stdin(std::process::Stdio::piped())
+                        .stdout(std::process::Stdio::piped())
+                        .spawn()?;
+                    if let Some(stdin) = child.stdin.as_mut() {
+                        stdin.write_all(input.as_bytes())?;
+                    }
+                    let out = child.wait_with_output()?;
+                    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+                } else {
+                    Err(e)
                 }
-                let out = child.wait_with_output()?;
-                Ok(String::from_utf8_lossy(&out.stdout).to_string())
             }
             Err(e) => Err(e),
         }
     }
+}
+
+/// Public factory to obtain the default system executor without exposing the
+/// concrete `DefaultSystemExecutor` type. Tests and callers should use this
+/// to construct the default executor when they need one.
+pub fn default_system_executor() -> Box<dyn SystemExecutor> {
+    Box::new(DefaultSystemExecutor)
 }
 
 // Note: The project no longer exposes a global SystemExecutor. Tests and callers must
