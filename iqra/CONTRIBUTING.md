@@ -49,3 +49,19 @@
 بالمساهمة أنت توافق ضمنياً على أن تغييراتك ستكون مرخصة تحت نفس ترخيص المشروع (MIT/Apache-2.0 كما هو موضح في الملف LICENSE).
 
 شكراً لمساهمتك!
+
+---
+
+## Quick start (English)
+
+Run examples from PowerShell:
+
+```powershell
+cargo run --release -- Run --code "$(Get-Content examples\basics.iqra -Raw)"
+```
+
+Start REPL:
+
+```powershell
+cargo run --release -- Repl
+```
