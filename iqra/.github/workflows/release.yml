@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-matrix:
+    name: Build and package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            ext: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: zip
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            ext: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: |
+          cargo install cargo-audit --locked
+      - name: Audit dependencies
+        run: |
+          cargo audit --deny warnings
+      - name: Add target (if needed)
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        run: rustup target add ${{ matrix.target }}
+      - name: Build
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+      - name: Package artifact
+        run: |
+          mkdir -p release
+          case "${{ matrix.os }}" in
+            windows-latest)
+              cp target/${{ matrix.target }}/release/iqra.exe release/iqra.exe || true
+              powershell -Command "Compress-Archive -Path release/iqra.exe -DestinationPath release/iqra-${{ matrix.target }}.${{ matrix.ext }}"
+              ;;
+            *)
+              cp target/${{ matrix.target }}/release/iqra release/iqra || true
+              tar -czf release/iqra-${{ matrix.target }}.${{ matrix.ext }} -C release iqra
+              ;;
+          esac
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iqra-${{ matrix.target }}
+          path: release/*
