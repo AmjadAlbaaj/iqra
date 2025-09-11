@@ -5,11 +5,11 @@ This folder contains example IQRA scripts demonstrating language features.
 Run an example (PowerShell):
 
 ```powershell
-# Run basics.iqra
-cargo run --release -- Run --code "$(Get-Content examples\basics.iqra -Raw)"
+# Run basics.iqra (recommended)
+cargo run --release -- run examples\basics.iqra
 
 # Or run inline source
-cargo run -- Run --code "print 1 + 2;"
+cargo run -- run --code "print 1 + 2;"
 ```
 
 Notes
