@@ -1,14 +1,16 @@
-# chore: remove global executor and make SystemExecutor per-instance
+# chore: remove global executor; DI for SystemExecutor; Arabic UX polish
 
-This PR removes the global system executor and introduces a per-instance `SystemExecutor` trait that is injected into `Runtime` via `Runtime::new_with_executor`.
+This PR removes the global system executor and introduces a per-instance `SystemExecutor` injected into `Runtime` via `Runtime::new_with_executor`. It also adds Arabic punctuation support and aligns built-in `len/طول` behavior.
 
 ## Summary of changes
 
 - Introduced `SystemExecutor` trait and `default_system_executor()` factory (concrete executor kept private).
 - `Runtime` now stores a `Box<dyn SystemExecutor>` and exposes `Runtime::new_with_executor`.
-- Tests updated to use deterministic mock executors; added tests covering `IQRA_ALLOW_SHELL_FALLBACK`.
-- Replaced `atty` usage with `std::io::IsTerminal` and removed the dependency.
-- Added Arabic docs (`DOCS_AR.md`), CI updates, and repository templates.
+- Shell fallback is opt-in via `IQRA_ALLOW_SHELL_FALLBACK` and covered by tests.
+- Arabic punctuation: the lexer recognizes Arabic comma `،` and Arabic semicolon `؛`, and the parser accepts them as statement separators.
+- Built-in `len`/`length`/`طول` now supports strings, lists, and maps. Tests added.
+- Documentation updated in `README.md`, `DOCS_AR.md`, and `DOCS_EN.md` to reflect punctuation and `len` behavior.
+- CI updated: format, clippy (deny warnings), tests, `cargo-audit` on push and weekly; coverage workflow included.
 
 ## Local checks performed
 
@@ -25,7 +27,7 @@ Any code that previously used the global executor should now construct the runti
 let mut rt = Runtime::new_with_executor(default_system_executor());
 ```
 
-Shell fallback is opt-in via the environment variable `IQRA_ALLOW_SHELL_FALLBACK`.
+Enable shell fallback only if you explicitly set `IQRA_ALLOW_SHELL_FALLBACK=1` in the environment.
 
 ---
 
