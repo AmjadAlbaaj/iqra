@@ -28,21 +28,28 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// اطبع تحية باسم محدد
+    #[command(visible_alias = "حيي")]
     Greet {
         /// Name to greet
         #[arg(short, long, default_value = "world")]
         name: String,
     },
     /// اعرض معلومات النسخة
+    #[command(visible_alias = "نسخة")]
     Version,
     /// شغّل برنامج نصي بلغة اقرأ من سلسلة مباشرة
+    #[command(visible_alias = "شغل")]
     Run {
-        #[arg(short, long, help = "Source code inline")]
+        #[arg(short, long, visible_alias = "كود", help = "Source code inline")]
         code: Option<String>,
+        /// Execute from a file path
+        #[arg(long, visible_alias = "ملف", help = "Execute from file path")]
+        file: Option<String>,
         #[arg(long, help = "Output JSON")]
         json: bool,
     },
     /// REPL تفاعلي للغة اقرأ
+    #[command(visible_alias = "تفاعلي")]
     Repl,
 }
 
@@ -65,7 +72,7 @@ fn main() {
         Commands::Version => {
             println!("iqra version {}", env!("CARGO_PKG_VERSION"));
         }
-        Commands::Run { code, json } => {
+        Commands::Run { code, file, json } => {
             use iqra::diagnostics::{error_as_json, render_error_with_opts};
             use iqra::lang::{Runtime, lex, parse};
             let colorize = match cli.color.as_str() {
@@ -73,8 +80,18 @@ fn main() {
                 "never" => false,
                 _ => std::io::stderr().is_terminal(),
             };
-            let Some(source) = code else {
-                eprintln!("الخيار --code مطلوب حالياً");
+            let source = if let Some(c) = code {
+                c
+            } else if let Some(path) = file {
+                match std::fs::read_to_string(&path) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("تعذر قراءة الملف '{}': {}", path, e);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                eprintln!("يرجى تمرير --code أو --file (أو --كود/--ملف)");
                 std::process::exit(1);
             };
             match lex(&source).and_then(|t| parse(&t).map(|stmts| (t, stmts))) {
@@ -175,20 +192,20 @@ fn main() {
             let mut rl = Editor::<IqraCompleter, FileHistory>::new().expect("repl");
             rl.set_helper(Some(IqraCompleter));
             let mut rt = Runtime::new();
-            println!("اكتب :help للمساعدة، :q للخروج");
+            println!("اكتب :help أو :مساعدة للمساعدة، :q أو :خروج للخروج");
             while let Ok(line) = rl.readline(">> ") {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
                     continue;
                 }
-                if trimmed == ":q" || trimmed == ":quit" {
+                if trimmed == ":q" || trimmed == ":quit" || trimmed == ":خروج" {
                     break;
                 }
-                if trimmed == ":help" {
+                if trimmed == ":help" || trimmed == ":مساعدة" {
                     println!(
                         "{}",
                         iqra::diagnostics::render_warning(
-                            ":q أو :quit للخروج | :help للمساعدة",
+                            ":q أو :quit أو :خروج للخروج | :help أو :مساعدة للمساعدة",
                             colorize
                         )
                     );
