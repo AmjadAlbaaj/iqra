@@ -1,17 +1,17 @@
+use crate::lang::runtime::Runtime;
 use anyhow::Result;
+use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
-use rustyline::Editor;
 use std::fs;
-use crate::lang::runtime::Runtime;
 
 pub fn run_repl() -> Result<()> {
     println!("مرحباً بك في اقرأ - Welcome to Iqra");
     println!("اكتب 'خروج' أو 'exit' للخروج - Type 'خروج' or 'exit' to quit");
-    
+
     let mut rl = Editor::<(), DefaultHistory>::new()?;
     let mut runtime = Runtime::new();
-    
+
     loop {
         let readline = rl.readline("اقرأ> ");
         match readline {
@@ -20,15 +20,15 @@ pub fn run_repl() -> Result<()> {
                 if line.is_empty() {
                     continue;
                 }
-                
+
                 // Handle exit commands in both Arabic and English
                 if line == "خروج" || line == "exit" || line == "quit" {
                     println!("وداعاً! - Goodbye!");
                     break;
                 }
-                
+
                 let _ = rl.add_history_entry(line);
-                
+
                 match runtime.execute(line) {
                     Ok(result) => {
                         if !result.is_nil() {
@@ -54,7 +54,7 @@ pub fn run_repl() -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -62,10 +62,10 @@ pub fn run_file(path: &str) -> Result<()> {
     let content = fs::read_to_string(path)?;
     let mut runtime = Runtime::new();
     let result = runtime.execute(&content)?;
-    
+
     if !result.is_nil() {
         println!("{}", result);
     }
-    
+
     Ok(())
 }

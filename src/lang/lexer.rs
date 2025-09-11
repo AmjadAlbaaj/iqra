@@ -6,17 +6,17 @@ pub enum Token {
     Number(f64),
     String(String),
     Identifier(String),
-    
+
     // Keywords (Arabic and English)
-    If,      // اذا / إذا / if
-    Else,    // وإلا / والا / وإلاّ / else
-    While,   // بينما / while
-    True,    // صحيح / true
-    False,   // خطأ / false
-    And,     // و / && / and
-    Or,      // أو / || / or
-    Not,     // ليس / ! / not
-    
+    If,    // اذا / إذا / if
+    Else,  // وإلا / والا / وإلاّ / else
+    While, // بينما / while
+    True,  // صحيح / true
+    False, // خطأ / false
+    And,   // و / && / and
+    Or,    // أو / || / or
+    Not,   // ليس / ! / not
+
     // Operators
     Plus,
     Minus,
@@ -30,7 +30,7 @@ pub enum Token {
     Greater,
     GreaterEqual,
     Assign,
-    
+
     // Delimiters
     LeftParen,
     RightParen,
@@ -40,7 +40,7 @@ pub enum Token {
     RightBracket,
     Comma,
     Semicolon,
-    
+
     // Special
     Newline,
     Eof,
@@ -95,23 +95,19 @@ pub struct Lexer {
 impl Lexer {
     pub fn new(input: &str) -> Self {
         let chars: Vec<char> = input.chars().collect();
-        let current_char = chars.get(0).copied();
-        Self {
-            input: chars,
-            position: 0,
-            current_char,
-        }
+        let current_char = chars.first().copied();
+        Self { input: chars, position: 0, current_char }
     }
-    
+
     fn advance(&mut self) {
         self.position += 1;
         self.current_char = self.input.get(self.position).copied();
     }
-    
+
     fn peek(&self) -> Option<char> {
         self.input.get(self.position + 1).copied()
     }
-    
+
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.current_char {
             if ch.is_whitespace() && ch != '\n' {
@@ -121,7 +117,7 @@ impl Lexer {
             }
         }
     }
-    
+
     fn skip_comment(&mut self) {
         // Skip until end of line
         while let Some(ch) = self.current_char {
@@ -131,10 +127,10 @@ impl Lexer {
             self.advance();
         }
     }
-    
+
     fn read_number(&mut self) -> f64 {
         let mut num_str = String::new();
-        
+
         while let Some(ch) = self.current_char {
             if ch.is_ascii_digit() || ch == '.' {
                 num_str.push(ch);
@@ -147,14 +143,14 @@ impl Lexer {
                 break;
             }
         }
-        
+
         num_str.parse().unwrap_or(0.0)
     }
-    
+
     fn read_string(&mut self) -> String {
         let mut string = String::new();
         self.advance(); // Skip opening quote
-        
+
         while let Some(ch) = self.current_char {
             if ch == '"' {
                 self.advance(); // Skip closing quote
@@ -180,13 +176,13 @@ impl Lexer {
                 self.advance();
             }
         }
-        
+
         string
     }
-    
+
     fn read_identifier(&mut self) -> String {
         let mut identifier = String::new();
-        
+
         while let Some(ch) = self.current_char {
             if ch.is_alphanumeric() || ch == '_' || is_arabic_letter(ch) {
                 identifier.push(ch);
@@ -195,10 +191,10 @@ impl Lexer {
                 break;
             }
         }
-        
+
         identifier
     }
-    
+
     pub fn next_token(&mut self) -> Token {
         loop {
             match self.current_char {
@@ -228,7 +224,7 @@ impl Lexer {
                         "و" => Token::And,
                         "أو" => Token::Or,
                         "ليس" => Token::Not,
-                        
+
                         // English keywords
                         "if" => Token::If,
                         "else" => Token::Else,
@@ -238,7 +234,7 @@ impl Lexer {
                         "and" => Token::And,
                         "or" => Token::Or,
                         "not" => Token::Not,
-                        
+
                         _ => Token::Identifier(identifier),
                     };
                 }

@@ -15,7 +15,7 @@ impl Value {
     pub fn is_nil(&self) -> bool {
         matches!(self, Value::Nil)
     }
-    
+
     pub fn is_truthy(&self) -> bool {
         match self {
             Value::Nil => false,
@@ -26,7 +26,7 @@ impl Value {
             Value::Map(m) => !m.is_empty(),
         }
     }
-    
+
     pub fn type_name(&self) -> &'static str {
         match self {
             Value::Nil => "nil",
@@ -37,28 +37,28 @@ impl Value {
             Value::Map(_) => "map",
         }
     }
-    
+
     pub fn as_number(&self) -> Option<f64> {
         match self {
             Value::Number(n) => Some(*n),
             _ => None,
         }
     }
-    
+
     pub fn as_string(&self) -> Option<&str> {
         match self {
             Value::String(s) => Some(s),
             _ => None,
         }
     }
-    
+
     pub fn as_list(&self) -> Option<&Vec<Value>> {
         match self {
             Value::List(l) => Some(l),
             _ => None,
         }
     }
-    
+
     pub fn as_map(&self) -> Option<&HashMap<String, Value>> {
         match self {
             Value::Map(m) => Some(m),
