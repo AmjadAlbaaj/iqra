@@ -1,0 +1,23 @@
+name: Weekly security audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Every Monday at 06:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Run cargo-audit
+        uses: RustSec/rustsec-action@v1
+        with:
+          format: json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

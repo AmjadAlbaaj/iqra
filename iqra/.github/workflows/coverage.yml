@@ -1,24 +1,30 @@
-name: Coverage
+name: Test coverage (Linux)
+
 on:
-  push:
-    branches: [ main, chore/remove-global-executor ]
+  workflow_dispatch: {}
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
+  push:
+    branches: [ chore/remove-global-executor ]
 
 jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
           profile: minimal
+          toolchain: stable
           override: true
       - name: Install tarpaulin
         run: |
-          cargo install cargo-tarpaulin --version 0.22.0 || true
+          cargo install cargo-tarpaulin --version 0.30.0 || true
       - name: Run coverage
         run: |
-          cargo tarpaulin --out Xml || true
+          cargo tarpaulin --workspace --tests --out Xml
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: cobertura.xml
