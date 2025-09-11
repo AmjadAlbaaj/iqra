@@ -30,6 +30,17 @@ fn arabic_digits_number() {
 }
 
 #[test]
+fn arabic_punctuation_semi_comma() {
+    // Use Arabic semicolon (U+061B) and Arabic comma (U+060C)
+    let src = "عدد=١، ق=[١،٢]؛ اطبع طول(ق)؛";
+    let toks = lex(src).unwrap();
+    let ast = parse(&toks).unwrap();
+    let mut rt = Runtime::new();
+    let out = rt.exec(&ast).unwrap();
+    assert_eq!(out.printed[0].to_string(), "2");
+}
+
+#[test]
 fn arabic_boolean_synonyms() {
     // نعم / لا synonyms for true / false
     let src = "اذا نعم { اطبع 1; } وإلا { اطبع 2; } اذا لا { اطبع 3; } وإلا { اطبع 4; }";

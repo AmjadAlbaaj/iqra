@@ -1274,7 +1274,9 @@ fn truthy(v: &Value) -> bool {
 fn builtin_len(args: &[Value]) -> Result<Value> {
     match &args[0] {
         Value::Str(s) => Ok(Value::Number(s.chars().count() as f64)),
-        _ => Err(IqraError::runtime("الوسيـط يجب أن يكون نصاً")),
+        Value::List(vs) => Ok(Value::Number(vs.len() as f64)),
+        Value::Map(m) => Ok(Value::Number(m.len() as f64)),
+        _ => Err(IqraError::runtime("الوسيـط يجب أن يكون نصاً أو قائمة أو قاموساً")),
     }
 }
 fn builtin_type(args: &[Value]) -> Result<Value> {
