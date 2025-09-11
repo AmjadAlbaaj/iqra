@@ -1,5 +1,4 @@
 # IQRA Language Specification
-# IQRA Language Specification
 
 This document describes the core grammar, keywords, data types, and statement structure for IQRA — a reference for users and contributors.
 
@@ -29,7 +28,7 @@ IQRA is a small scripting language designed for education and lightweight automa
 - Bool: boolean
 - Nil: none
 - List: ordered sequence via `list(...)`
-- Map/Dict: key/value store via `dict(...)`
+- Map/Dict: key/value store via `map(...)`
 - Function: callable value
 
 ## Statements
@@ -66,7 +65,12 @@ Arabic function example:
 - `print(...)` / `اطبع(...)`
 - `type(x)`, `is_number(x)`, `is_string(x)`
 - `list(...)`, `list_len(x)`, `append(x, v)`, `get(x, i)`
-- `dict(...)`, `map_get(m, k)`, `map_set(m, k, v)`
+- `map(...)`, `map_get(m, k)`, `map_set(m, k, v)`
+
+## Arabic punctuation
+
+- The lexer recognizes Arabic comma `،` and semicolon `؛`.
+- The parser accepts `،` as an item/statement separator and `؛` as a statement terminator.
 
 ## Naming rules
 
