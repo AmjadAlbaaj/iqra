@@ -28,7 +28,7 @@ IQRA is a small scripting language designed for education and lightweight automa
 - Bool: boolean
 - Nil: none
 - List: ordered sequence via `list(...)`
-- Map/Dict: key/value store via `map(...)`
+- Map/Dict: key/value store via `dict(...)` (Arabic aliases: `قاموس`, `خريطة`)
 - Function: callable value
 
 ## Statements
