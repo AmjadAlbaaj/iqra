@@ -63,3 +63,14 @@ fn builtin_len_arabic() {
     let out = rt.exec(&ast).unwrap();
     assert_eq!(out.printed[0].to_string(), "5");
 }
+
+#[test]
+fn arabic_map_alias_khareeta() {
+    // Ensure 'خريطة' acts as dict constructor and map_set/get work
+    let src = "م=خريطة(); م = map_set(م, 'مفتاح', 42); اطبع map_get(م, 'مفتاح');";
+    let toks = lex(src).unwrap();
+    let ast = parse(&toks).unwrap();
+    let mut rt = Runtime::new();
+    let out = rt.exec(&ast).unwrap();
+    assert_eq!(out.printed[0].to_string(), "42");
+}

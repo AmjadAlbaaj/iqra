@@ -1222,7 +1222,7 @@ impl Runtime {
                             "forEach" | "لكل" => builtin_list_foreach(&evaled),
                             "concat" | "ادمج" => builtin_list_concat(&evaled),
                             "groupBy" | "صنف" => builtin_list_group_by(&evaled),
-                            "dict" | "قاموس" => builtin_map(&evaled),
+                            "dict" | "قاموس" | "خريطة" => builtin_map(&evaled),
                             "sum" | "جمع" => builtin_list_sum(&evaled),
                             "average" | "متوسط" => builtin_list_average(&evaled),
                             "max" | "أكبر" => builtin_list_max(&evaled),

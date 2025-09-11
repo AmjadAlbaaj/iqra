@@ -49,6 +49,7 @@ pub const KEYWORDS: &[&str] = &[
     // دوال القواميس
     "dict",
     "قاموس",
+    "خريطة",
     "map_get",
     "جلب_عنصر",
     "map_set",
