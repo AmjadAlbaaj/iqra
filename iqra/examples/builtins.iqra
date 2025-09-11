@@ -1,0 +1,20 @@
+# Built-ins showcase (EN/AR)
+
+اطبع نوع(123);
+اطبع نوع('abc');
+اطبع طول('مرحبا');
+
+xs = قائمة(1, 2, 3, 4);
+اطبع list_len(xs);
+اطبع contains(xs, 3);
+اطبع sum(xs);
+اطبع average(xs);
+
+m = قاموس('a', 1, 'b', 2);
+اطبع map_get(m, 'a');
+m2 = map_set(m, 'c', 3);
+اطبع map_remove(m2, 'b');
+
+اطبع reverse('iqra');
+اطبع عدد_الكلمات('iqra is cool');
+اطبع تاريخ_اليوم();

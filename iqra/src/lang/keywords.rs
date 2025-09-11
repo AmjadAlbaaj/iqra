@@ -68,6 +68,7 @@ pub const KEYWORDS: &[&str] = &[
     "type",
     "نوع",
     "len",
+    "length",
     "طول",
     // دوال رياضية ونصية وتاريخية
     "sum",

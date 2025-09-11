@@ -120,7 +120,7 @@ impl<'a> Parser<'a> {
     }
 
     fn optional_semi(&mut self) {
-        if matches!(self.peek().kind, TokenKind::Semi) {
+        if matches!(self.peek().kind, TokenKind::Semi | TokenKind::Comma) {
             self.advance();
         }
     }

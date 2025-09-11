@@ -67,10 +67,7 @@ fn name(args) { ... }
 
 ## الدوال المدمجة (Builtins)
 
-- `print(...)` / `اطبع(...)`
-- `type(x)`, `is_number(x)`, `is_string(x)`
-- `list(...)`, `list_len(x)`, `append(x, v)`, `get(x, i)`
-- `map(...)`, `map_get(m, k)`, `map_set(m, k, v)`
+للاطلاع على قائمة كاملة مع الشرح، راجع `docs/BUILTINS_AR.md`.
 
 ## علامات الوقف العربية
 

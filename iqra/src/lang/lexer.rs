@@ -244,7 +244,7 @@ pub fn lex(input: &str) -> Result<Vec<Token>> {
                     col: start_col,
                 });
             }
-            ';' => {
+            ';' | '؛' => {
                 chars.next();
                 col += 1;
                 toks.push(Token {
@@ -254,7 +254,7 @@ pub fn lex(input: &str) -> Result<Vec<Token>> {
                     col: start_col,
                 });
             }
-            ',' => {
+            ',' | '،' => {
                 chars.next();
                 col += 1;
                 toks.push(Token {

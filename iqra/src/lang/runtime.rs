@@ -1007,7 +1007,6 @@ impl Runtime {
             ("صنف", 2),
             ("dict", usize::MAX),
             ("قاموس", usize::MAX),
-            ("map", usize::MAX),
             ("خريطة", usize::MAX),
             ("map_get", 2),
             ("جلب_عنصر", 2),

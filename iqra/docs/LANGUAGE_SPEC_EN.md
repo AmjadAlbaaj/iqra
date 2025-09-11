@@ -62,10 +62,7 @@ Arabic function example:
 
 ## Builtins
 
-- `print(...)` / `اطبع(...)`
-- `type(x)`, `is_number(x)`, `is_string(x)`
-- `list(...)`, `list_len(x)`, `append(x, v)`, `get(x, i)`
-- `map(...)`, `map_get(m, k)`, `map_set(m, k, v)`
+- See `docs/BUILTINS_EN.md` for a complete list and details.
 
 ## Arabic punctuation
 

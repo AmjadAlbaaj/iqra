@@ -13,5 +13,7 @@ cargo run -- run --code "print 1 + 2;"
 ```
 
 Notes
+
 - `system_demo.iqra` contains system-call examples that are commented out for safety.
 - Add new example files and update `docs/LANGUAGE_SPEC_EN.md` if you add new builtins.
+- See also: `examples/builtins.iqra` and the full built-ins reference in `docs/BUILTINS_EN.md` / `docs/BUILTINS_AR.md`.

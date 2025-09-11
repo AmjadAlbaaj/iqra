@@ -91,8 +91,18 @@ fn main() {
                     }
                 }
             } else {
-                eprintln!("يرجى تمرير --code أو --file (أو --كود/--ملف)");
-                std::process::exit(1);
+                // Fallback: read entire stdin
+                use std::io::{self, Read};
+                let mut buf = String::new();
+                if let Err(e) = io::stdin().read_to_string(&mut buf) {
+                    eprintln!("تعذر قراءة الإدخال القياسي: {}", e);
+                    std::process::exit(1);
+                }
+                if buf.trim().is_empty() {
+                    eprintln!("يرجى تمرير --code أو --file أو تزويد stdin");
+                    std::process::exit(1);
+                }
+                buf
             };
             match lex(&source).and_then(|t| parse(&t).map(|stmts| (t, stmts))) {
                 Ok((_toks, stmts)) => {

@@ -75,7 +75,10 @@ while x < 3 {
 
 - اللغة (AR): `docs/LANGUAGE_SPEC_AR.md`
 - Language (EN): `docs/LANGUAGE_SPEC_EN.md`
+- Built-ins (EN): `docs/BUILTINS_EN.md`
+- الدوال المدمجة (AR): `docs/BUILTINS_AR.md`
 - أمثلة | Examples: `examples/`
+  - Built-ins tour: `examples/builtins.iqra`
 
 ---
 
