@@ -34,7 +34,7 @@ Note: Statement separators accept both `,` and the Arabic comma `،`. Statement 
 ## Maps (Dictionaries)
 
 - `dict(k1, v1, k2, v2, ...)` (Arabic: `قاموس` / `خريطة`): Construct a map from key/value pairs.
-- `map_get(m, k)` (Arabic: `جلب_عنصر`): Get value for key `k` or `nil` if absent.
+- `map_get(m, k)` (Arabic: `جلب_عنصر`): Get value for key `k`. Errors if the key is missing.
 - `map_set(m, k, v)` (Arabic: `تعيين_عنصر`): Returns a new map with `k:=v`.
 - `map_remove(m, k)` (Arabic: `حذف_عنصر`): Returns a new map without `k`.
 

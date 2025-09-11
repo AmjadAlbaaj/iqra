@@ -3,7 +3,7 @@ use assert_cmd::Command;
 #[test]
 fn default_greeting() {
     let mut cmd = Command::cargo_bin("iqra").unwrap();
-    cmd.assert().success().stdout(predicates::str::contains("Hello, world!"));
+    cmd.assert().success().stdout(predicates::str::contains("مرحباً، world!"));
 }
 
 #[test]

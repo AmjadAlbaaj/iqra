@@ -4,7 +4,7 @@ pub mod lang;
 
 /// Core greeting logic (placeholder for real domain logic)
 pub fn make_greeting(name: &str) -> String {
-    format!("Hello, {name}!")
+    format!("مرحباً، {name}!")
 }
 
 #[cfg(test)]

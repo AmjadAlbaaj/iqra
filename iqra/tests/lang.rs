@@ -17,7 +17,7 @@ fn builtin_type_arabic() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["number", "string", "bool", "nil"]);
+    assert_eq!(printed, vec!["عدد", "نص", "منطقي", "لاشيء"]);
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn builtin_is_number() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["true", "false", "false"]);
+    assert_eq!(printed, vec!["صحيح", "خطأ", "خطأ"]);
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn builtin_is_number_arabic() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["true", "false", "false"]);
+    assert_eq!(printed, vec!["صحيح", "خطأ", "خطأ"]);
 }
 
 #[test]
@@ -50,7 +50,7 @@ fn builtin_is_string() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["true", "false", "false"]);
+    assert_eq!(printed, vec!["صحيح", "خطأ", "خطأ"]);
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn builtin_is_string_arabic() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["true", "false", "false"]);
+    assert_eq!(printed, vec!["صحيح", "خطأ", "خطأ"]);
 }
 use iqra::lang::{Expr, Runtime, Stmt, TokenKind, lex, parse};
 
@@ -118,7 +118,7 @@ fn runtime_string_concat_and_bool() {
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
     assert_eq!(printed[0], "Hi Rust");
-    assert_eq!(printed[1], "false");
+    assert_eq!(printed[1], "خطأ");
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn logical_operators_boolean() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["false", "true", "true"]);
+    assert_eq!(printed, vec!["خطأ", "صحيح", "صحيح"]);
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn logical_short_circuit_and() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["false", "true"]);
+    assert_eq!(printed, vec!["خطأ", "صحيح"]);
 }
 
 #[test]
@@ -187,7 +187,7 @@ fn logical_arabic_keywords() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["false", "true", "true"]);
+    assert_eq!(printed, vec!["خطأ", "صحيح", "صحيح"]);
 }
 
 #[test]
@@ -222,7 +222,7 @@ fn builtin_list_arabic() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed[0], "list");
+    assert_eq!(printed[0], "قائمة");
     assert_eq!(printed[1], "0");
     assert!(printed[2].contains("["));
     assert!(printed[2].contains("]"));
@@ -284,7 +284,7 @@ fn builtin_map_arabic() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed[0], "map");
+    assert_eq!(printed[0], "قاموس");
     assert_eq!(printed[1], "1");
     assert_eq!(printed[2], "2");
     assert!(
@@ -331,8 +331,8 @@ fn builtin_list_append_remove_contains() {
     assert!(
         printed[1].contains("1") && printed[1].contains("3") && !printed[1].contains("2, 3, 1")
     );
-    assert_eq!(printed[2], "true");
-    assert_eq!(printed[3], "false");
+    assert_eq!(printed[2], "صحيح");
+    assert_eq!(printed[3], "خطأ");
 }
 
 #[test]
@@ -347,8 +347,8 @@ fn builtin_list_append_remove_contains_arabic() {
     assert!(
         printed[1].contains("1") && printed[1].contains("3") && !printed[1].contains("2, 3, 1")
     );
-    assert_eq!(printed[2], "true");
-    assert_eq!(printed[3], "false");
+    assert_eq!(printed[2], "صحيح");
+    assert_eq!(printed[3], "خطأ");
 }
 
 #[test]
@@ -555,7 +555,7 @@ fn builtin_list_average_english() {
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
     assert_eq!(printed[0], "4");
-    assert_eq!(printed[1], "nil");
+    assert_eq!(printed[1], "لاشيء");
 }
 
 #[test]
@@ -567,7 +567,7 @@ fn builtin_list_average_arabic() {
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
     assert_eq!(printed[0], "4");
-    assert_eq!(printed[1], "nil");
+    assert_eq!(printed[1], "لاشيء");
 }
 
 #[test]
@@ -579,7 +579,7 @@ fn builtin_list_max_min_english() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["5", "1", "nil", "nil"]);
+    assert_eq!(printed, vec!["5", "1", "لاشيء", "لاشيء"]);
 }
 
 #[test]
@@ -591,7 +591,7 @@ fn builtin_list_max_min_arabic() {
     let mut rt = Runtime::new();
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
-    assert_eq!(printed, vec!["5", "1", "nil", "nil"]);
+    assert_eq!(printed, vec!["5", "1", "لاشيء", "لاشيء"]);
 }
 
 #[test]
@@ -684,7 +684,7 @@ fn test_builtin_list_get_append_remove_contains_find_concat() {
     assert_eq!(printed[0], "20");
     assert_eq!(printed[1], "[1, 2, 3]");
     assert_eq!(printed[2], "[5, 7]");
-    assert_eq!(printed[3], "true");
+    assert_eq!(printed[3], "صحيح");
     assert_eq!(printed[4], "2");
     assert_eq!(printed[5], "[1, 2, 3, 4]");
 }
@@ -698,5 +698,5 @@ fn test_builtin_map_set_remove() {
     let out = rt.exec(&ast).unwrap();
     let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
     assert_eq!(printed[0], "123");
-    assert_eq!(printed[1], "nil");
+    assert_eq!(printed[1], "لاشيء");
 }

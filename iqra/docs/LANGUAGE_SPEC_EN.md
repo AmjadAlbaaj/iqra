@@ -9,7 +9,7 @@ IQRA is a small scripting language designed for education and lightweight automa
 ## Grammar
 
 - Statements are typically terminated by `;`.
-- Expressions: numbers, strings, booleans (`true`/`false`), and `nil`.
+- Expressions: numbers, strings, booleans (`true`/`false`; Arabic display `صحيح`/`خطأ`), and `nil` (Arabic display `لاشيء`).
 - Arithmetic operators: `+`, `-`, `*`, `/`.
 - Comparisons: `==`, `!=`, `<`, `>`, `<=`, `>=`.
 - Logical operators: `&&`, `||`, `!` and word-forms `and`, `or`, `not` as well as Arabic forms `و`, `أو`, `ليس`.
@@ -19,7 +19,7 @@ IQRA is a small scripting language designed for education and lightweight automa
 - Control: `if`, `else`, `while` (Arabic: `اذا`, `وإلا`, `بينما`).
 - Declarations/Functions: `let`, `fn`, `return` (Arabic: `دع`, `دالة`, `رجع`).
 - Print: `print` (Arabic: `اطبع`).
-- Values: `true`/`false` (Arabic: `صحيح`/`خطأ`), `nil` (Arabic: `لاشيء`).
+- Values: Booleans display in Arabic as `صحيح`/`خطأ`. `nil` displays as `لاشيء`.
 
 ## Data Types
 
