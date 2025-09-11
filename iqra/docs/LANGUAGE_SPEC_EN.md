@@ -6,6 +6,8 @@ This document describes the core grammar, keywords, data types, and statement st
 
 IQRA is a small scripting language designed for education and lightweight automation, with first-class support for Arabic and English tokens.
 
+Note: Output display language defaults to Arabic. To switch printed output to English, see `docs/OUTPUT_LANG_EN.md`.
+
 ## Grammar
 
 - Statements are typically terminated by `;`.

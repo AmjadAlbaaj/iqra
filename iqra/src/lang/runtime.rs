@@ -438,23 +438,55 @@ pub enum Value {
 
 // تعريف Display خارج الدوال
 use std::fmt;
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum OutputLang {
+    Arabic,
+    English,
+}
+fn output_lang() -> OutputLang {
+    match std::env::var("IQRA_OUTPUT_LANG") {
+        Ok(v) => {
+            let v = v.to_ascii_lowercase();
+            if v == "en" || v == "english" { OutputLang::English } else { OutputLang::Arabic }
+        }
+        Err(_) => OutputLang::Arabic,
+    }
+}
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Number(n) => write!(f, "{}", n),
             Value::Str(s) => write!(f, "{}", s),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Nil => write!(f, "nil"),
-            Value::List(vs) => {
-                write!(f, "[{}]", vs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "))
-            }
+            Value::Bool(b) => match output_lang() {
+                OutputLang::Arabic => {
+                    if *b { write!(f, "صحيح") } else { write!(f, "خطأ") }
+                }
+                OutputLang::English => {
+                    if *b { write!(f, "true") } else { write!(f, "false") }
+                }
+            },
+            Value::Nil => match output_lang() {
+                OutputLang::Arabic => write!(f, "لاشيء"),
+                OutputLang::English => write!(f, "nil"),
+            },
+            Value::List(vs) => write!(
+                f,
+                "[{}]",
+                vs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ")
+            ),
             Value::Map(m) => write!(
                 f,
                 "{{{}}}",
                 m.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(", ")
             ),
-            Value::Function { .. } => write!(f, "<function>"),
-            Value::NativeFunction { name, .. } => write!(f, "<native:{}>", name),
+            Value::Function { .. } => match output_lang() {
+                OutputLang::Arabic => write!(f, "<دالة>"),
+                OutputLang::English => write!(f, "<function>"),
+            },
+            Value::NativeFunction { name, .. } => match output_lang() {
+                OutputLang::Arabic => write!(f, "<دالة_مدمجة:{}>", name),
+                OutputLang::English => write!(f, "<native:{}>", name),
+            },
         }
     }
 }
@@ -1204,7 +1236,8 @@ impl Runtime {
                         }
                         match name.as_str() {
                             "len" | "length" | "طول" => builtin_len(&evaled),
-                            "type" | "نوع" => builtin_type(&evaled),
+                            "type" => builtin_type(&evaled),
+                            "نوع" => builtin_type_ar(&evaled),
                             "is_number" | "رقم؟" => builtin_is_number(&evaled),
                             "is_string" | "نص؟" => builtin_is_string(&evaled),
                             "to_number" | "إلى_رقم" => builtin_to_number(&evaled),
@@ -1291,6 +1324,19 @@ fn builtin_type(args: &[Value]) -> Result<Value> {
     };
     Ok(Value::Str(t.into()))
 }
+fn builtin_type_ar(args: &[Value]) -> Result<Value> {
+    let t = match &args[0] {
+        Value::Number(_) => "عدد",
+        Value::Str(_) => "نص",
+        Value::Bool(_) => "منطقي",
+        Value::Nil => "لاشيء",
+        Value::List(_) => "قائمة",
+        Value::Map(_) => "قاموس",
+        Value::Function { .. } => "دالة",
+        Value::NativeFunction { .. } => "دالة مدمجة",
+    };
+    Ok(Value::Str(t.into()))
+}
 fn builtin_is_number(args: &[Value]) -> Result<Value> {
     Ok(Value::Bool(matches!(&args[0], Value::Number(_))))
 }
@@ -1314,23 +1360,26 @@ fn builtin_to_string(args: &[Value]) -> Result<Value> {
     Ok(Value::Str(match &args[0] {
         Value::Number(n) => n.to_string(),
         Value::Str(s) => s.clone(),
-        Value::Bool(b) => {
-            if *b {
-                "صحيح".into()
-            } else {
-                "خطأ".into()
-            }
-        }
-        Value::Nil => "لاشيء".into(),
+        Value::Bool(b) => match output_lang() {
+            OutputLang::Arabic => if *b { "صحيح".into() } else { "خطأ".into() },
+            OutputLang::English => if *b { "true".into() } else { "false".into() },
+        },
+        Value::Nil => match output_lang() {
+            OutputLang::Arabic => "لاشيء".into(),
+            OutputLang::English => "nil".into(),
+        },
         Value::List(vs) => {
             format!("[{}]", vs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "))
         }
-        Value::Map(m) => format!(
-            "{{{}}}",
-            m.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(", ")
-        ),
-        Value::Function { .. } => "<دالة>".into(),
-        Value::NativeFunction { .. } => "<دالة مدمجة>".into(),
+        Value::Map(m) => format!("{{{}}}", m.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(", ")),
+        Value::Function { .. } => match output_lang() {
+            OutputLang::Arabic => "<دالة>".into(),
+            OutputLang::English => "<function>".into(),
+        },
+        Value::NativeFunction { .. } => match output_lang() {
+            OutputLang::Arabic => "<دالة مدمجة>".into(),
+            OutputLang::English => "<native>".into(),
+        },
     }))
 }
 
