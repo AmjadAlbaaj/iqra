@@ -13,3 +13,8 @@ cargo run -- run examples/hello.iqra
 
 Security note: system calls go through a `SystemExecutor` abstraction for testability and safety.
 Do not enable shell fallback in untrusted environments. Use the env var `IQRA_ALLOW_SHELL_FALLBACK=1` only when you understand the risks.
+
+Language notes
+
+- Arabic punctuation support: Arabic comma `،` is accepted as an item/statement separator and Arabic semicolon `؛` as a statement terminator.
+- `len`/`length`/`طول` returns length for strings, lists, and maps.
