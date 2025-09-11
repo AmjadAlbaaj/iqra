@@ -240,6 +240,17 @@ fn builtin_list_get_and_len() {
 }
 
 #[test]
+fn builtin_len_on_list_and_map() {
+    let src = "print len(list(1,2)); m = dict('a',1,'b',2); print len(m);";
+    let toks = lex(src).unwrap();
+    let ast = parse(&toks).unwrap();
+    let mut rt = Runtime::new();
+    let out = rt.exec(&ast).unwrap();
+    let printed: Vec<String> = out.printed.iter().map(|v| v.to_string()).collect();
+    assert_eq!(printed, vec!["2", "2"]);
+}
+
+#[test]
 fn builtin_list_get_out_of_bounds() {
     let src = "l = list(1); print get(l, 5);";
     let toks = lex(src).unwrap();
