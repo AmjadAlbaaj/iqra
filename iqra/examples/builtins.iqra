@@ -18,3 +18,7 @@ m2 = map_set(m, 'c', 3);
 اطبع reverse('iqra');
 اطبع عدد_الكلمات('iqra is cool');
 اطبع تاريخ_اليوم();
+
+# Using Arabic alias for dict constructor
+م = خريطة('x', 10, 'y', 20);
+اطبع map_get(م, 'y');
