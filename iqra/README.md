@@ -1,41 +1,40 @@
 # iqra
 
-![CI](https://github.com/AmjadAlbaaj/iqra/actions/workflows/ci.yml/badge.svg)
-![Coverage](https://github.com/AmjadAlbaaj/iqra/actions/workflows/coverage.yml/badge.svg)
+[![CI](https://github.com/AmjadAlbaaj/iqra/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AmjadAlbaaj/iqra/actions/workflows/ci.yml)
+[![Quality & Audit](https://github.com/AmjadAlbaaj/iqra/actions/workflows/quality-and-audit.yml/badge.svg?branch=main)](https://github.com/AmjadAlbaaj/iqra/actions/workflows/quality-and-audit.yml)
+[![Coverage (Linux)](https://github.com/AmjadAlbaaj/iqra/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/AmjadAlbaaj/iqra/actions/workflows/coverage.yml)
 
-مشروع Rust بسيط يركّز على العربية — مفسّر صغير ولغة سكربتات.
+لغة برمجة عربية بالكامل مع دعم إنجليزي، وتوثيق ثنائي اللغة، وبيئة تفاعلية.
 
-## Quick start / دليل سريع
+Iqra is an Arabic-first scripting language with full English support, bilingual docs, and a friendly REPL.
 
-Requirements / المتطلبات:
+---
 
-- Rust (via rustup): [https://rustup.rs](https://rustup.rs)
+## المتطلبات | Requirements
 
-Run the REPL:
+- Rust toolchain: <https://rustup.rs>
+
+## البدء السريع | Quick Start
+
+- REPL:
 
 ```powershell
 cargo run -- repl
 ```
 
-Developer quick commands (Windows PowerShell):
+- Run inline code:
 
 ```powershell
-.\dev.ps1 fmt      # format
-.\dev.ps1 clippy   # lint
-.\dev.ps1 test     # run tests
+cargo run -- run --code "print 1"
 ```
 
-Unix / macOS:
+- Tests:
 
-```bash
-cargo fmt --all
-cargo clippy --all-targets -- -D warnings
-cargo test --all --verbose
+```powershell
+cargo test
 ```
 
-## Examples / أمثلة
-
-Arabic example:
+## مثال | Example (AR)
 
 ```iqra
 عدد = ١
@@ -45,7 +44,7 @@ Arabic example:
 }
 ```
 
-English example:
+## Example (EN)
 
 ```iqra
 x = 1
@@ -55,69 +54,60 @@ while x < 3 {
 }
 ```
 
-Short list/map examples:
+---
 
-```iqra
-l = list(1,2,3)
-اطبع sum(l)      # 6
-m = map('name','Ahmed','age',30)
-اطبع map_get(m,'name')
-```
+## المميزات | Features
 
-## Contributing / المساهمة
+- دعم كامل للكلمات المفتاحية العربية والإنجليزية، مع معرّفات ويونيكود وأرقام هندية.
+- رسائل أخطاء وتشخيص عربية احترافية، مع إخراج JSON اختياري.
+- دوال مدمجة للأعداد، القوائم، القواميس، النصوص، والتواريخ — أسماء عربية وإنجليزية.
+- REPL مع إكمال تلقائي للكلمات المفتاحية.
+- تنفيذ الأنظمة قابل للحقن للاختبار (SystemExecutor) بدون أي حالة عمومية.
 
-- Run tests and linters before PRs:
+ملاحظة الأنظمة | System Note:
 
-```powershell
-cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
-cargo test --all --verbose
-```
-
-- CI runs formatting, clippy and tests on push/PR (see `.github/workflows/ci.yml`).
+- الإرجاع إلى الصدفة shell معطّل افتراضيًا. لتمكينه: اضبط `IQRA_ALLOW_SHELL_FALLBACK=1`.
 
 ---
 
-For more examples and the full list of built-ins, see the `tests/` directory and source code in `src/lang/`.
+## التوثيق | Documentation
 
-## Testing / Mocking system calls
+- اللغة (AR): `docs/LANGUAGE_SPEC_AR.md`
+- Language (EN): `docs/LANGUAGE_SPEC_EN.md`
+- أمثلة | Examples: `examples/`
 
-The runtime supports injecting a `SystemExecutor` so tests can mock system calls and remain deterministic.
+---
 
-Example (Rust test):
+## بعض الدوال المدمجة | Selected Built-ins
 
-```rust
-use iqra::lang::runtime::{Runtime, SystemExecutor, Value, Result};
+- قوائم | Lists: `list`, `list_len`, `get`, `append`, `remove`, `contains` / `قائمة`, `طول_القائمة`, `عنصر`, `أضف`, `احذف`, `يحتوي`
+- قواميس | Maps: `map`, `map_get`, `map_set`, `map_remove` / `قاموس`, `جلب_عنصر`, `تعيين_عنصر`, `حذف_عنصر`
+- تحويل/فحص | Convert/Check: `to_number`, `to_string`, `is_number`, `is_string` / `إلى_رقم`, `إلى_نص`, `رقم؟`, `نص؟`
+- نوع/طول | Type/Len: `type`, `len` / `نوع`, `طول`
+- نص/تواريخ | Text/Date: `word_count`, `reverse`, `today` / `عدد_الكلمات`, `عكس`, `تاريخ_اليوم`
 
-struct MockExec;
-impl SystemExecutor for MockExec {
-  fn exec(&self, _cmd: &str) -> std::io::Result<String> { Ok("ok".to_string()) }
-  fn exec_with_io(&self, _cmd: &str, _input: &str) -> std::io::Result<String> { Ok("out".to_string()) }
-}
+اطّلع على `examples/` لمزيد من الأمثلة العملية.
 
-#[test]
-fn system_mock_example() {
-  let mut rt = Runtime::new_with_executor(Box::new(MockExec));
-  let res = rt.call_builtin("system", &[Value::Str("echo hi".into())]).unwrap();
-  assert_eq!(res, Value::Str("ok".into()));
-}
-```
+---
 
-Note: The older global setter API (`set_global_executor`) has been removed; prefer
-`Runtime::new_with_executor(Box::new(...))` to inject test doubles or custom executors per
-runtime instance.
+## المساهمة | Contributing
 
-### Advanced mocking
+مرحبًا بمساهماتك! راجع `CONTRIBUTING.md` و`CODE_OF_CONDUCT.md`.
 
-You can write integration tests that simulate different command outputs and failures by
-implementing `SystemExecutor`. Example tests are included in `tests/mock_exec.rs` and show:
-
-- returning platform-like stdout (e.g. `echo hi` -> "hi\n")
-- echoing input back for `system_with_io` cases (simulating `cat`)
-- simulating errors (commands containing `fail` return an error)
-
-Run the tests as usual:
+### تطوير محلي
 
 ```powershell
+cargo fmt --all
+cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all
 ```
+
+تغطية (Linux فقط على CI): راجع workflow `coverage.yml` (tarpaulin).
+
+---
+
+## الترخيص | License
+
+MIT © المساهمون | the contributors
+
+

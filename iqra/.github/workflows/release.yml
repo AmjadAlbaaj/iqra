@@ -47,18 +47,16 @@ jobs:
         run: |
           cargo build --release --target ${{ matrix.target }}
       - name: Package artifact
+        shell: pwsh
         run: |
-          mkdir -p release
-          case "${{ matrix.os }}" in
-            windows-latest)
-              cp target/${{ matrix.target }}/release/iqra.exe release/iqra.exe || true
-              powershell -Command "Compress-Archive -Path release/iqra.exe -DestinationPath release/iqra-${{ matrix.target }}.${{ matrix.ext }}"
-              ;;
-            *)
-              cp target/${{ matrix.target }}/release/iqra release/iqra || true
-              tar -czf release/iqra-${{ matrix.target }}.${{ matrix.ext }} -C release iqra
-              ;;
-          esac
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          if ('${{ matrix.os }}' -eq 'windows-latest') {
+            Copy-Item "target/${{ matrix.target }}/release/iqra.exe" "release/iqra.exe" -ErrorAction SilentlyContinue
+            Compress-Archive -Path "release/iqra.exe" -DestinationPath "release/iqra-${{ matrix.target }}.${{ matrix.ext }}"
+          }
+          else {
+            bash -lc "cp target/${{ matrix.target }}/release/iqra release/iqra || true && tar -czf release/iqra-${{ matrix.target }}.${{ matrix.ext }} -C release iqra"
+          }
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
