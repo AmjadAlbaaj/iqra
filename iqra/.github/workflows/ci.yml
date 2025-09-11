@@ -18,6 +18,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - name: Kill lingering iqra.exe (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-Process iqra -ErrorAction SilentlyContinue | Stop-Process -Force; exit 0
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -37,5 +42,8 @@ jobs:
       - name: Audit dependencies
         run: |
           cargo audit --deny warnings
+      - name: Clean (Windows)
+        if: runner.os == 'Windows'
+        run: cargo clean
       - name: Tests
         run: cargo test --all --verbose

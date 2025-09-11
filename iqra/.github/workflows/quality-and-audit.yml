@@ -2,7 +2,7 @@ name: Quality checks & cargo-audit
 
 on:
   push:
-    branches: [ main, master, chore/remove-global-executor ]
+    branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
 

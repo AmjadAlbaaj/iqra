@@ -34,6 +34,22 @@ cargo run -- run --code "print 1"
 cargo test
 ```
 
+### لغة الإخراج | Output Language
+
+- الوضع الافتراضي عربي. لتغيير لغة العرض إلى الإنجليزية مؤقتًا:
+
+```powershell
+$env:IQRA_OUTPUT_LANG = "en"; cargo run -- repl
+```
+
+- لإرجاعها للعربية في ذات الجلسة:
+
+```powershell
+Remove-Item Env:IQRA_OUTPUT_LANG
+```
+
+راجع `docs/OUTPUT_LANG_AR.md` و`docs/OUTPUT_LANG_EN.md` للتفاصيل.
+
 ## مثال | Example (AR)
 
 ```iqra
