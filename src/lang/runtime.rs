@@ -507,7 +507,16 @@ impl Runtime {
                 match &args[0] {
                     Value::Number(n) => Ok(Value::Number(*n)),
                     Value::String(s) => {
-                        s.parse::<f64>()
+                        // Convert Arabic digits to ASCII digits first
+                        let ascii_str = s.chars().map(|ch| {
+                            match ch {
+                                '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+                                '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+                                _ => ch,
+                            }
+                        }).collect::<String>();
+                        
+                        ascii_str.parse::<f64>()
                             .map(Value::Number)
                             .map_err(|_| anyhow!("Cannot convert '{}' to number", s))
                     }

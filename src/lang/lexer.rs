@@ -122,6 +122,16 @@ impl Lexer {
         }
     }
     
+    fn skip_comment(&mut self) {
+        // Skip until end of line
+        while let Some(ch) = self.current_char {
+            if ch == '\n' {
+                break;
+            }
+            self.advance();
+        }
+    }
+    
     fn read_number(&mut self) -> f64 {
         let mut num_str = String::new();
         
@@ -245,8 +255,14 @@ impl Lexer {
                     return Token::Multiply;
                 }
                 Some('/') => {
-                    self.advance();
-                    return Token::Divide;
+                    if self.peek() == Some('/') {
+                        // Line comment
+                        self.skip_comment();
+                        continue;
+                    } else {
+                        self.advance();
+                        return Token::Divide;
+                    }
                 }
                 Some('%') => {
                     self.advance();

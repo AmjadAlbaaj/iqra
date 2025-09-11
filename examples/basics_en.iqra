@@ -1,0 +1,36 @@
+// English version of the basic example
+
+// Print welcome message
+print("Hello and welcome to Iqra Language!")
+print("مرحباً بك في لغة اقرأ!")
+
+// Arithmetic operations
+x = 10
+y = 5
+print("Addition:", x + y)
+print("Subtraction:", x - y)
+print("Multiplication:", x * y)
+print("Division:", x / y)
+
+// Working with lists
+numbers = list(1, 2, 3, 4, 5)
+print("List:", numbers)
+print("List length:", list_len(numbers))
+print("Sum of numbers:", sum(numbers))
+print("Average of numbers:", average(numbers))
+
+// Conditionals
+age = 25
+if age >= 18 {
+    print("Adult")
+} else {
+    print("Minor")
+}
+
+// Loops
+counter = 1
+print("Counting from 1 to 5:")
+while counter <= 5 {
+    print(counter)
+    counter = counter + 1
+}
