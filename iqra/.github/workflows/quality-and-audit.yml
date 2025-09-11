@@ -23,6 +23,12 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Kill lingering iqra.exe (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Get-Process iqra -ErrorAction SilentlyContinue | Stop-Process -Force; exit 0
+
       - name: Run rustfmt check
         run: |
           cargo fmt -- --check
@@ -30,6 +36,10 @@ jobs:
       - name: Run clippy (deny warnings)
         run: |
           cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Clean (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cargo clean
 
       - name: Run tests
         run: |
