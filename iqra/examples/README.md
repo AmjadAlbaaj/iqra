@@ -17,7 +17,6 @@ cargo run -- check --file .\examples\basics.iqra
 
 Notes
 
-
 Security quick examples (PowerShell)
 
 ```powershell
@@ -51,6 +50,10 @@ Remove-Item Env:IQRA_OUTPUT_LANG
 # نصي افتراضي (stderr)
 cargo run -- --log-level debug run --file .\examples\hello.iqra
 
+# إلى ملف باستخدام العلم --log-file (صيغة JSON أو نصي)
+cargo run -- --log-file C:\\temp\\iqra.log --log-level debug run --file .\examples\hello.iqra
+cargo run -- --log-file C:\\temp\\iqra.json --log-format json run --file .\examples\hello.iqra
+
 # إلى ملف نصي
 $env:IQRA_LOG_FILE = "C:\\temp\\iqra.log"
 cargo run -- --log-level debug run --file .\examples\hello.iqra
@@ -61,6 +64,8 @@ $env:IQRA_LOG_FILE = "C:\\temp\\iqra.json"
 cargo run -- --log-format json run --file .\examples\hello.iqra
 Remove-Item Env:IQRA_LOG_FILE
 ```
+
+ملاحظة: إذا تم تحديد كلٍ من `--log-file` و`IQRA_LOG_FILE` فسيتم استخدام قيمة `--log-file`.
 
 أمان سريع | Security quick examples (PowerShell)
 

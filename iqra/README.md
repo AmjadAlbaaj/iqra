@@ -42,7 +42,14 @@ cargo test
 cargo run -- --log-level debug run --file .\examples\hello.iqra
 ```
 
-- سجل إلى ملف (JSON أو نصي حسب `--log-format`):
+- إلى ملف باستخدام العلم `--log-file` (صيغة JSON أو نصي حسب `--log-format`):
+
+```powershell
+cargo run -- --log-file C:\\temp\\iqra.log --log-level debug run --file .\examples\hello.iqra
+cargo run -- --log-file C:\\temp\\iqra.json --log-format json run --file .\examples\hello.iqra
+```
+
+- بديل: عبر المتغير `IQRA_LOG_FILE` (العلم يتغلب على المتغير):
 
 ```powershell
 $env:IQRA_LOG_FILE = "C:\\temp\\iqra.log"
@@ -53,6 +60,8 @@ $env:IQRA_LOG_FILE = "C:\\temp\\iqra.json"
 cargo run -- --log-format json run --file .\examples\hello.iqra
 Remove-Item Env:IQRA_LOG_FILE
 ```
+
+ملاحظة: إذا تم تحديد كلٍ من `--log-file` و`IQRA_LOG_FILE` فسيتم استخدام قيمة `--log-file`.
 
 ### لغة الإخراج | Output Language
 
@@ -100,7 +109,7 @@ while x < 3 {
 - دوال مدمجة للأعداد، القوائم، القواميس، النصوص، والتواريخ — أسماء عربية وإنجليزية.
 - REPL مع إكمال تلقائي للكلمات المفتاحية.
 - تنفيذ الأنظمة قابل للحقن للاختبار (SystemExecutor) بدون أي حالة عمومية.
-- سجلات مرنة: `--log-level`, `--log-format (text|json)`, و`IQRA_LOG_FILE` لتوجيه السجلات إلى ملف.
+- سجلات مرنة: `--log-level`, `--log-format (text|json)`, `--log-file` (يتغلب على `IQRA_LOG_FILE`)، و`IQRA_LOG_FILE` لتوجيه السجلات إلى ملف.
 
 ملاحظة الأنظمة | System Note:
 
@@ -200,5 +209,3 @@ cargo test --all
 ## الترخيص | License
 
 MIT © المساهمون | the contributors
-
-
