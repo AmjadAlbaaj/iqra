@@ -34,6 +34,26 @@ cargo run -- run --code "print 1"
 cargo test
 ```
 
+### Logging | السجلات
+
+- نصي افتراضي إلى `stderr`:
+
+```powershell
+cargo run -- --log-level debug run --file .\examples\hello.iqra
+```
+
+- سجل إلى ملف (JSON أو نصي حسب `--log-format`):
+
+```powershell
+$env:IQRA_LOG_FILE = "C:\\temp\\iqra.log"
+cargo run -- --log-level debug run --file .\examples\hello.iqra
+Remove-Item Env:IQRA_LOG_FILE
+
+$env:IQRA_LOG_FILE = "C:\\temp\\iqra.json"
+cargo run -- --log-format json run --file .\examples\hello.iqra
+Remove-Item Env:IQRA_LOG_FILE
+```
+
 ### لغة الإخراج | Output Language
 
 - الوضع الافتراضي عربي. لتغيير لغة العرض إلى الإنجليزية مؤقتًا:
@@ -80,6 +100,7 @@ while x < 3 {
 - دوال مدمجة للأعداد، القوائم، القواميس، النصوص، والتواريخ — أسماء عربية وإنجليزية.
 - REPL مع إكمال تلقائي للكلمات المفتاحية.
 - تنفيذ الأنظمة قابل للحقن للاختبار (SystemExecutor) بدون أي حالة عمومية.
+- سجلات مرنة: `--log-level`, `--log-format (text|json)`, و`IQRA_LOG_FILE` لتوجيه السجلات إلى ملف.
 
 ملاحظة الأنظمة | System Note:
 
@@ -95,6 +116,7 @@ while x < 3 {
 - الدوال المدمجة (AR): `docs/BUILTINS_AR.md`
 - أمثلة | Examples: `examples/`
   - Built-ins tour: `examples/builtins.iqra`
+  - Quick Windows guide: `examples/README.md`
 
 ---
 

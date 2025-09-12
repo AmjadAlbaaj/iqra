@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use std::fs::OpenOptions;
 use std::io::IsTerminal;
 use tracing::{debug, info};
 use tracing_subscriber::filter::EnvFilter;
+use tracing_subscriber::{Registry, fmt, prelude::*};
 
 /// Simple CLI for iqra project
 #[derive(Parser, Debug)]
@@ -311,10 +313,57 @@ fn main() {
 fn init_tracing(cli: &Cli) {
     let level = if cli.quiet { "error" } else { cli.log_level.as_str() };
     let filter = EnvFilter::new(level);
-    let fmt = tracing_subscriber::fmt().with_env_filter(filter).with_target(false);
+
+    let subscriber = Registry::default().with(filter);
+
     match cli.log_format {
-        LogFormat::Text => fmt.compact().init(),
-        LogFormat::Json => fmt.json().init(),
+        LogFormat::Text => {
+            let stderr_layer =
+                fmt::layer().with_target(false).compact().with_writer(std::io::stderr);
+            if let Ok(path) = std::env::var("IQRA_LOG_FILE") {
+                let p = std::path::PathBuf::from(&path);
+                if let Some(parent) = p.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let file = match OpenOptions::new().create(true).append(true).open(&p) {
+                    Ok(f) => f,
+                    Err(_) => {
+                        // Fallback: skip file layer if we cannot open
+                        subscriber.with(stderr_layer).init();
+                        return;
+                    }
+                };
+                let (non_blocking, guard) = tracing_appender::non_blocking(file);
+                Box::leak(Box::new(guard));
+                let file_layer =
+                    fmt::layer().with_target(false).compact().with_writer(non_blocking);
+                subscriber.with(stderr_layer).with(file_layer).init();
+            } else {
+                subscriber.with(stderr_layer).init();
+            }
+        }
+        LogFormat::Json => {
+            let stderr_layer = fmt::layer().json().with_target(false).with_writer(std::io::stderr);
+            if let Ok(path) = std::env::var("IQRA_LOG_FILE") {
+                let p = std::path::PathBuf::from(&path);
+                if let Some(parent) = p.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let file = match OpenOptions::new().create(true).append(true).open(&p) {
+                    Ok(f) => f,
+                    Err(_) => {
+                        subscriber.with(stderr_layer).init();
+                        return;
+                    }
+                };
+                let (non_blocking, guard) = tracing_appender::non_blocking(file);
+                Box::leak(Box::new(guard));
+                let file_layer = fmt::layer().json().with_target(false).with_writer(non_blocking);
+                subscriber.with(stderr_layer).with(file_layer).init();
+            } else {
+                subscriber.with(stderr_layer).init();
+            }
+        }
     }
 }
 
