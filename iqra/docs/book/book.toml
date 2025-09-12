@@ -1,0 +1,10 @@
+[book]
+title = "Iqra Language"
+language = "ar"
+multilingual = true
+src = "src"
+
+[output.html]
+default-theme = "light"
+git-repository-url = "https://github.com/AmjadAlbaaj/iqra"
+site-url = "/iqra/"

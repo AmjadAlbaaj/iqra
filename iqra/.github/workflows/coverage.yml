@@ -33,9 +33,20 @@ jobs:
         shell: bash
         run: |
           mkdir -p coverage
-          cargo tarpaulin --workspace --tests --out Xml --output-dir coverage --timeout 240
+          cargo tarpaulin --workspace --tests --out Xml --out Html --output-dir coverage --timeout 240
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-xml
           path: coverage/*.xml
+      - name: Upload coverage HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage/tarpaulin-report.html
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/cobertura.xml
+          flags: rust
+          fail_ci_if_error: false
