@@ -36,6 +36,11 @@ All notable changes to this project will be documented in this file.
   - Built-ins docs (AR/EN): Added safety/timeout details and allow-list.
   - Examples README: sandbox and timeout quick examples.
 
+- Logging UX
+  - Added `--log-file` CLI flag to direct logs to a file (text or JSON per `--log-format`).
+  - Precedence: `--log-file` overrides `IQRA_LOG_FILE` environment variable when both are set.
+  - Tests added to validate file logging and flag precedence on Windows.
+
 ## Prior releases
 
 - Initial project scaffolding and built-ins.
