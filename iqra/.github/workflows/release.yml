@@ -41,15 +41,22 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path release | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/iqra.exe" "release/iqra.exe"
-          Compress-Archive -Path "release/iqra.exe" -DestinationPath "release/iqra-${{ matrix.target }}.${{ matrix.ext }}"
+          $pkg = "iqra-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path "release/$pkg" | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/iqra.exe" "release/$pkg/iqra.exe"
+          Copy-Item "README.md" "release/$pkg/README.md"
+          Copy-Item "LICENSE" "release/$pkg/LICENSE"
+          Compress-Archive -Path "release/$pkg/*" -DestinationPath "release/$pkg.zip"
       - name: Package (Unix)
         if: matrix.os != 'windows-latest'
         shell: bash
         run: |
           mkdir -p release
-          cp target/${{ matrix.target }}/release/iqra release/iqra
-          tar -czf release/iqra-${{ matrix.target }}.${{ matrix.ext }} -C release iqra
+          pkg="iqra-${{ matrix.target }}"
+          mkdir -p "release/$pkg"
+          cp target/${{ matrix.target }}/release/iqra "release/$pkg/iqra"
+          cp README.md LICENSE "release/$pkg/"
+          tar -czf "release/$pkg.tar.gz" -C release "$pkg"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -71,4 +78,5 @@ jobs:
           draft: false
           fail_on_unmatched_files: true
           files: |
-            release/*
+            release/*.zip
+            release/*.tar.gz

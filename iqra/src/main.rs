@@ -1,6 +1,7 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::io::IsTerminal;
 use tracing::{debug, info};
+use tracing_subscriber::filter::EnvFilter;
 
 /// Simple CLI for iqra project
 #[derive(Parser, Debug)]
@@ -9,6 +10,14 @@ struct Cli {
     /// Override log level (e.g. info, debug, trace)
     #[arg(long, env = "IQRA_LOG", default_value = "info", help = "Log level (info|debug|trace)")]
     log_level: String,
+
+    /// Log format (text or json)
+    #[arg(long, env = "IQRA_LOG_FORMAT", value_enum, default_value_t = LogFormat::Text, help = "Log format (text|json)")]
+    log_format: LogFormat,
+
+    /// Quiet mode (overrides log level to error)
+    #[arg(long, global = true, help = "الوضع الهادئ (أخطاء فقط)")]
+    quiet: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -23,6 +32,12 @@ struct Cli {
         help = "التحكم بالألوان (auto|always|never)"
     )]
     color: String,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum LogFormat {
+    Text,
+    Json,
 }
 
 #[derive(Subcommand, Debug)]
@@ -48,6 +63,16 @@ enum Commands {
         #[arg(long, help = "Output JSON")]
         json: bool,
     },
+    /// تحقق من صحة الشيفرة (تحليل لغوي/نحوي فقط)
+    #[command(visible_alias = "تحقق")]
+    Check {
+        #[arg(short, long, visible_alias = "كود", help = "Source code inline")]
+        code: Option<String>,
+        #[arg(long, visible_alias = "ملف", help = "Check from file path")]
+        file: Option<String>,
+        #[arg(long, help = "Output JSON result")]
+        json: bool,
+    },
     /// REPL تفاعلي للغة اقرأ
     #[command(visible_alias = "تفاعلي")]
     Repl,
@@ -55,12 +80,8 @@ enum Commands {
 
 fn main() {
     let cli = Cli::parse();
-    // Initialize tracing subscriber
-    tracing_subscriber::fmt()
-        .with_env_filter(cli.log_level.as_str())
-        .with_target(false)
-        .compact()
-        .init();
+    init_windows_console();
+    init_tracing(&cli);
 
     match cli.command.unwrap_or(Commands::Greet { name: "world".into() }) {
         Commands::Greet { name } => {
@@ -86,8 +107,8 @@ fn main() {
                 match std::fs::read_to_string(&path) {
                     Ok(s) => s,
                     Err(e) => {
-                        eprintln!("تعذر قراءة الملف '{}': {}", path, e);
-                        std::process::exit(1);
+                        exit_with_error_text(&format!("تعذر قراءة الملف '{}': {}", path, e), 2);
+                        unreachable!();
                     }
                 }
             } else {
@@ -95,12 +116,10 @@ fn main() {
                 use std::io::{self, Read};
                 let mut buf = String::new();
                 if let Err(e) = io::stdin().read_to_string(&mut buf) {
-                    eprintln!("تعذر قراءة الإدخال القياسي: {}", e);
-                    std::process::exit(1);
+                    exit_with_error_text(&format!("تعذر قراءة الإدخال القياسي: {}", e), 2);
                 }
                 if buf.trim().is_empty() {
-                    eprintln!("يرجى تمرير --code أو --file أو تزويد stdin");
-                    std::process::exit(1);
+                    exit_with_error_text("يرجى تمرير --code أو --file أو تزويد stdin", 2);
                 }
                 buf
             };
@@ -133,7 +152,7 @@ fn main() {
                             } else {
                                 eprintln!("{}", render_error_with_opts(&source, &e, colorize));
                             }
-                            std::process::exit(1);
+                            std::process::exit(4);
                         }
                     }
                 }
@@ -143,7 +162,47 @@ fn main() {
                     } else {
                         eprintln!("{}", render_error_with_opts(&source, &e, colorize));
                     }
-                    std::process::exit(1);
+                    std::process::exit(3);
+                }
+            }
+        }
+        Commands::Check { code, file, json } => {
+            use iqra::diagnostics::{error_as_json, render_error_with_opts};
+            use iqra::lang::{lex, parse};
+            let colorize = match cli.color.as_str() {
+                "always" => true,
+                "never" => false,
+                _ => std::io::stderr().is_terminal(),
+            };
+            let source = if let Some(c) = code {
+                c
+            } else if let Some(path) = file {
+                match std::fs::read_to_string(&path) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        exit_with_error_text(&format!("تعذر قراءة الملف '{}': {}", path, e), 2);
+                        unreachable!();
+                    }
+                }
+            } else {
+                exit_with_error_text("يرجى تمرير --code أو --file", 2);
+                unreachable!();
+            };
+            match lex(&source).and_then(|t| parse(&t).map(|_stmts| ())) {
+                Ok(()) => {
+                    if json {
+                        println!("{}", serde_json::json!({"status":"ok"}));
+                    } else {
+                        println!("تم التحقق بنجاح");
+                    }
+                }
+                Err(e) => {
+                    if cli.error_json {
+                        eprintln!("{}", error_as_json(&source, &e));
+                    } else {
+                        eprintln!("{}", render_error_with_opts(&source, &e, colorize));
+                    }
+                    std::process::exit(3);
                 }
             }
         }
@@ -248,3 +307,44 @@ fn main() {
         }
     }
 }
+
+fn init_tracing(cli: &Cli) {
+    let level = if cli.quiet { "error" } else { cli.log_level.as_str() };
+    let filter = EnvFilter::new(level);
+    let fmt = tracing_subscriber::fmt().with_env_filter(filter).with_target(false);
+    match cli.log_format {
+        LogFormat::Text => fmt.compact().init(),
+        LogFormat::Json => fmt.json().init(),
+    }
+}
+
+fn exit_with_error_text(msg: &str, code: i32) {
+    eprintln!("{} (ERRCODE={})", msg, code);
+    std::process::exit(code);
+}
+
+#[cfg(windows)]
+fn init_windows_console() {
+    use windows_sys::Win32::System::Console::{
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetStdHandle, STD_ERROR_HANDLE,
+        STD_OUTPUT_HANDLE, SetConsoleCP, SetConsoleMode, SetConsoleOutputCP,
+    };
+    unsafe {
+        // Prefer UTF-8 code page for I/O
+        let _ = SetConsoleOutputCP(65001);
+        let _ = SetConsoleCP(65001);
+        // Enable ANSI escape sequences for colors on stdout and stderr
+        for handle_kind in [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+            let h = GetStdHandle(handle_kind);
+            if !h.is_null() {
+                let mut mode: u32 = 0;
+                if GetConsoleMode(h, &mut mode) != 0 {
+                    let _ = SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn init_windows_console() {}
