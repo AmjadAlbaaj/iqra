@@ -396,9 +396,14 @@ fn system_timeout_ms() -> Option<u128> {
 mod internal_tests {
     use super::*;
     use std::env;
+    use std::sync::Mutex;
+    use once_cell::sync::Lazy;
+
+    static ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     // Helper to temporarily set an env var and restore it after the closure runs.
     fn with_env_var<F: FnOnce() -> R, R>(key: &str, val: &str, f: F) -> R {
+        let _guard = ENV_LOCK.lock().unwrap();
         let prev = env::var_os(key);
         unsafe {
             env::set_var(key, val);
