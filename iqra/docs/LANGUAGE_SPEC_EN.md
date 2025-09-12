@@ -81,7 +81,10 @@ Arabic function example:
 
 ## Security
 
-- System execution is opt-in (via `IQRA_ALLOW_SHELL_FALLBACK`) and tests should inject a `SystemExecutor` mock.
+- Filesystem sandbox (optional) via `IQRA_FS_ROOT`: file operations (`read_file`/`write_file`/`list_files`) are denied outside the configured root with an "Access denied" message.
+- Safer system execution: allow-list of commands and forbidden metacharacters (`&`, `|`, `;`, `>`, `<`); shell fallback is opt-in via `IQRA_ALLOW_SHELL_FALLBACK`.
+- Command timeout via `IQRA_SYSTEM_TIMEOUT_MS` (milliseconds). On timeout, the process is terminated and an empty output string is returned (no runtime error).
+- For tests, inject a mock `SystemExecutor` via `Runtime::new_with_executor` to avoid touching the real system.
 
 ## Performance
 

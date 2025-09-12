@@ -281,6 +281,20 @@ fn canonicalize(path: &Path) -> std::io::Result<PathBuf> {
     std::fs::canonicalize(path)
 }
 
+#[inline]
+fn normalize_path_for_cmp(p: &Path) -> String {
+    let s = p.to_string_lossy().to_string();
+    #[cfg(windows)]
+    {
+        let s = if let Some(rest) = s.strip_prefix("\\\\?\\") { rest.to_string() } else { s };
+        s.replace('\u{005C}', "/").to_ascii_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        s
+    }
+}
+
 #[allow(dead_code)]
 fn in_sandbox(target: &Path) -> bool {
     match fs_root() {
@@ -288,27 +302,12 @@ fn in_sandbox(target: &Path) -> bool {
         Some(root) => {
             let root_c = canonicalize(root.as_path()).unwrap_or(root.clone());
             let tgt_c = canonicalize(target).unwrap_or(target.to_path_buf());
-            if tgt_c.starts_with(&root_c) {
-                return true;
-            }
-            // Fallback: compare as normalized strings for Windows case-insensitivity and separator differences
-            let norm = |p: &Path| {
-                let s = p.to_string_lossy().to_string();
-                #[cfg(windows)]
-                {
-                    s.replace('\u{005C}', "/").to_ascii_lowercase()
-                }
-                #[cfg(not(windows))]
-                {
-                    s
-                }
-            };
-            let mut rs = norm(&root_c);
-            let ts = norm(&tgt_c);
+            let mut rs = normalize_path_for_cmp(&root_c);
+            let ts = normalize_path_for_cmp(&tgt_c);
             if !rs.ends_with('/') {
                 rs.push('/');
             }
-            ts.starts_with(&rs)
+            ts == rs.trim_end_matches('/') || ts.starts_with(&rs)
         }
     }
 }
@@ -319,26 +318,12 @@ fn in_sandbox_with_root(root_opt: &Option<PathBuf>, target: &Path) -> bool {
         Some(root) => {
             let root_c = canonicalize(root).unwrap_or(root.clone());
             let tgt_c = canonicalize(target).unwrap_or(target.to_path_buf());
-            if tgt_c.starts_with(&root_c) {
-                return true;
-            }
-            let norm = |p: &Path| {
-                let s = p.to_string_lossy().to_string();
-                #[cfg(windows)]
-                {
-                    s.replace('\u{005C}', "/").to_ascii_lowercase()
-                }
-                #[cfg(not(windows))]
-                {
-                    s
-                }
-            };
-            let mut rs = norm(&root_c);
-            let ts = norm(&tgt_c);
+            let mut rs = normalize_path_for_cmp(&root_c);
+            let ts = normalize_path_for_cmp(&tgt_c);
             if !rs.ends_with('/') {
                 rs.push('/');
             }
-            ts.starts_with(&rs)
+            ts == rs.trim_end_matches('/') || ts.starts_with(&rs)
         }
     }
 }
