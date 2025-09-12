@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::fs::OpenOptions;
 use std::io::IsTerminal;
+use std::path::PathBuf;
 use tracing::{debug, info};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::{Registry, fmt, prelude::*};
@@ -20,6 +21,10 @@ struct Cli {
     /// Quiet mode (overrides log level to error)
     #[arg(long, global = true, help = "الوضع الهادئ (أخطاء فقط)")]
     quiet: bool,
+
+    /// ملف السجلات (بديل عن المتغير البيئي IQRA_LOG_FILE)
+    #[arg(long, env = "IQRA_LOG_FILE", help = "ملف السجلات (يغلب المتغير البيئي)")]
+    log_file: Option<String>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -262,6 +267,15 @@ fn main() {
             let colorize = std::io::stdout().is_terminal();
             let mut rl = Editor::<IqraCompleter, FileHistory>::new().expect("repl");
             rl.set_helper(Some(IqraCompleter));
+
+            // Load history from persistent file if available
+            let history_path = resolve_history_path();
+            if let Some(p) = &history_path {
+                if let Some(parent) = p.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = rl.load_history(p);
+            }
             let mut rt = Runtime::new();
             println!("اكتب :help أو :مساعدة للمساعدة، :q أو :خروج للخروج");
             while let Ok(line) = rl.readline(">> ") {
@@ -270,6 +284,10 @@ fn main() {
                     continue;
                 }
                 if trimmed == ":q" || trimmed == ":quit" || trimmed == ":خروج" {
+                    // Save history on exit
+                    if let Some(p) = &history_path {
+                        let _ = rl.save_history(p);
+                    }
                     break;
                 }
                 if trimmed == ":help" || trimmed == ":مساعدة" {
@@ -280,9 +298,15 @@ fn main() {
                             colorize
                         )
                     );
+                    if let Some(p) = &history_path {
+                        let _ = rl.save_history(p);
+                    }
                     continue;
                 }
                 rl.add_history_entry(trimmed).ok();
+                if let Some(p) = &history_path {
+                    let _ = rl.save_history(p);
+                }
                 match lex(trimmed).and_then(|t| parse(&t).map(|stmts| (t, stmts))) {
                     Ok((_toks, stmts)) => match rt.exec(&stmts) {
                         Ok(out) => {
@@ -310,17 +334,46 @@ fn main() {
     }
 }
 
+fn resolve_history_path() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let mut p = PathBuf::from(appdata);
+            p.push("iqra");
+            p.push("history.txt");
+            return Some(p);
+        }
+        None
+    }
+    #[cfg(not(windows))]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            let mut p = PathBuf::from(home);
+            p.push(".iqra_history");
+            return Some(p);
+        }
+        None
+    }
+}
+
 fn init_tracing(cli: &Cli) {
     let level = if cli.quiet { "error" } else { cli.log_level.as_str() };
     let filter = EnvFilter::new(level);
 
     let subscriber = Registry::default().with(filter);
 
+    // Choose log-file path: CLI flag wins, else environment variable
+    let log_file_path: Option<String> = cli
+        .log_file
+        .as_ref()
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("IQRA_LOG_FILE").ok());
+
     match cli.log_format {
         LogFormat::Text => {
             let stderr_layer =
                 fmt::layer().with_target(false).compact().with_writer(std::io::stderr);
-            if let Ok(path) = std::env::var("IQRA_LOG_FILE") {
+            if let Some(path) = log_file_path.clone() {
                 let p = std::path::PathBuf::from(&path);
                 if let Some(parent) = p.parent() {
                     let _ = std::fs::create_dir_all(parent);
@@ -344,7 +397,7 @@ fn init_tracing(cli: &Cli) {
         }
         LogFormat::Json => {
             let stderr_layer = fmt::layer().json().with_target(false).with_writer(std::io::stderr);
-            if let Ok(path) = std::env::var("IQRA_LOG_FILE") {
+            if let Some(path) = log_file_path.clone() {
                 let p = std::path::PathBuf::from(&path);
                 if let Some(parent) = p.parent() {
                     let _ = std::fs::create_dir_all(parent);

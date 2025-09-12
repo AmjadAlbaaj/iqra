@@ -22,6 +22,8 @@ Iqra is an Arabic-first scripting language with full English support, bilingual 
 cargo run -- repl
 ```
 
+ملاحظة: يحتفظ REPL بسجل الأوامر بين الجلسات. على Windows يُخزن في `%APPDATA%\iqra\history.txt`.
+
 - Run inline code:
 
 ```powershell
@@ -108,6 +110,7 @@ while x < 3 {
 - رسائل أخطاء وتشخيص عربية احترافية، مع إخراج JSON اختياري.
 - دوال مدمجة للأعداد، القوائم، القواميس، النصوص، والتواريخ — أسماء عربية وإنجليزية.
 - REPL مع إكمال تلقائي للكلمات المفتاحية.
+- REPL يحفظ سجل الأوامر بين الجلسات (Windows: `%APPDATA%\iqra\history.txt`).
 - تنفيذ الأنظمة قابل للحقن للاختبار (SystemExecutor) بدون أي حالة عمومية.
 - سجلات مرنة: `--log-level`, `--log-format (text|json)`, `--log-file` (يتغلب على `IQRA_LOG_FILE`)، و`IQRA_LOG_FILE` لتوجيه السجلات إلى ملف.
 
