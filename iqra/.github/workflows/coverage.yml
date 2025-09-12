@@ -7,24 +7,35 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - name: Install tarpaulin
-        run: |
-          cargo install cargo-tarpaulin --version 0.30.0 || true
+          fetch-depth: 1
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-tarpaulin
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin@0.30.0
       - name: Run coverage
+        shell: bash
         run: |
-          cargo tarpaulin --workspace --tests --out Xml
+          mkdir -p coverage
+          cargo tarpaulin --workspace --tests --out Xml --output-dir coverage --timeout 240
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
-          path: cobertura.xml
+          name: coverage-xml
+          path: coverage/*.xml
