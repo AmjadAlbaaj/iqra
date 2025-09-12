@@ -87,3 +87,30 @@ fn system_timeout_kills_long_running() {
         env::remove_var("IQRA_SYSTEM_TIMEOUT_MS");
     }
 }
+
+#[test]
+fn fs_sandbox_denies_traversal_on_nonexistent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("root");
+    fs::create_dir_all(&root).unwrap();
+
+    unsafe {
+        env::set_var("IQRA_FS_ROOT", &root);
+    }
+
+    // Attempt to escape with .. to a sibling path; target file does not exist
+    let outside_attempt = root.join("..").join("outside").join("y.txt");
+    let code = format!("print write_file('{}', 'data')", outside_attempt.display());
+
+    let toks = lex(&code).unwrap();
+    let ast = parse(&toks).unwrap();
+    let mut rt = Runtime::new();
+    let out = rt.exec(&ast).unwrap();
+    let printed: Vec<String> = out.printed.iter().map(|v| strip_colors(&v.to_string())).collect();
+    // write_file returns string denial message in our built-in
+    assert!(printed[0].contains("تم رفض الوصول") || printed[0].contains("رفض"));
+
+    unsafe {
+        env::remove_var("IQRA_FS_ROOT");
+    }
+}

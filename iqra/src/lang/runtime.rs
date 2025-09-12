@@ -295,13 +295,70 @@ fn normalize_path_for_cmp(p: &Path) -> String {
     }
 }
 
+// Normalize a path without touching the filesystem: collapse '.' and '..' segments
+// and produce an absolute-like string for comparison. When the input is relative,
+// it will be resolved against the current working directory best-effort.
+fn normalize_abs_or_canon(target: &Path) -> PathBuf {
+    if let Ok(can) = canonicalize(target) {
+        return can;
+    }
+    let mut s = if target.is_absolute() {
+        normalize_path_for_cmp(target)
+    } else {
+        let base = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let joined = base.join(target);
+        normalize_path_for_cmp(&joined)
+    };
+    // Split by '/', collapse '.' and '..'
+    let mut parts: Vec<String> = Vec::new();
+    let is_abs = s.starts_with('/');
+    let mut drive: Option<String> = None;
+    if !is_abs {
+        // handle Windows drive like 'c:' prefix
+        if let Some(pos) = s.find(':') {
+            let (d, rest) = s.split_at(pos + 1);
+            drive = Some(d.to_string());
+            s = rest.to_string();
+        }
+    } else if let Some(pos) = s.find(':') {
+        // Absolute with drive, e.g. 'c:/...'
+        let (d, rest) = s.split_at(pos + 1);
+        drive = Some(d.to_string());
+        s = rest.to_string();
+    }
+    for comp in s.split('/') {
+        if comp.is_empty() || comp == "." {
+            continue;
+        }
+        if comp == ".." {
+            if let Some(last) = parts.pop()
+                && last.is_empty()
+            {
+                parts.push(last);
+            }
+            continue;
+        }
+        parts.push(comp.to_string());
+    }
+    let mut out = String::new();
+    let has_drive = drive.is_some();
+    if let Some(d) = drive {
+        out.push_str(&d);
+    }
+    if is_abs || has_drive {
+        out.push('/');
+    }
+    out.push_str(&parts.join("/"));
+    PathBuf::from(out)
+}
+
 #[allow(dead_code)]
 fn in_sandbox(target: &Path) -> bool {
     match fs_root() {
         None => true,
         Some(root) => {
             let root_c = canonicalize(root.as_path()).unwrap_or(root.clone());
-            let tgt_c = canonicalize(target).unwrap_or(target.to_path_buf());
+            let tgt_c = normalize_abs_or_canon(target);
             let mut rs = normalize_path_for_cmp(&root_c);
             let ts = normalize_path_for_cmp(&tgt_c);
             if !rs.ends_with('/') {
@@ -317,7 +374,7 @@ fn in_sandbox_with_root(root_opt: &Option<PathBuf>, target: &Path) -> bool {
         None => true,
         Some(root) => {
             let root_c = canonicalize(root).unwrap_or(root.clone());
-            let tgt_c = canonicalize(target).unwrap_or(target.to_path_buf());
+            let tgt_c = normalize_abs_or_canon(target);
             let mut rs = normalize_path_for_cmp(&root_c);
             let ts = normalize_path_for_cmp(&tgt_c);
             if !rs.ends_with('/') {

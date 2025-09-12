@@ -82,6 +82,9 @@ Arabic function example:
 ## Security
 
 - Filesystem sandbox (optional) via `IQRA_FS_ROOT`: file operations (`read_file`/`write_file`/`list_files`) are denied outside the configured root with an "Access denied" message.
+	- Path checks normalize both the sandbox root and target paths using canonicalization when possible, and a component-based normalization fallback when the target does not yet exist.
+	- Traversal attempts using `..` or mixed separators are blocked even if the file or directory does not exist (prevents time-of-check issues).
+	- On Windows, comparisons are case-insensitive and treat `\\` as `/`; UNC `\\?\` prefixes are handled transparently.
 - Safer system execution: allow-list of commands and forbidden metacharacters (`&`, `|`, `;`, `>`, `<`); shell fallback is opt-in via `IQRA_ALLOW_SHELL_FALLBACK`.
 - Command timeout via `IQRA_SYSTEM_TIMEOUT_MS` (milliseconds). On timeout, the process is terminated and an empty output string is returned (no runtime error).
 - For tests, inject a mock `SystemExecutor` via `Runtime::new_with_executor` to avoid touching the real system.
