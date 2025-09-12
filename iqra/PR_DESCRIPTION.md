@@ -4,7 +4,7 @@
 
 This branch removes the old global system executor API and replaces it with a per-instance `SystemExecutor` injected into `Runtime` via `Runtime::new_with_executor`. The change improves testability and reduces global mutable state.
 
-Security hardening and Arabic-first UX are included: a filesystem sandbox (`IQRA_FS_ROOT`), safer system execution (allow-list, forbidden metacharacters, optional shell fallback), and an execution timeout (`IQRA_SYSTEM_TIMEOUT_MS`). The user-facing experience defaults to Arabic with an `IQRA_OUTPUT_LANG` toggle.
+Security hardening and Arabic-first UX are included: a filesystem sandbox (`IQRA_FS_ROOT`), safer system execution (allow-list, forbidden metacharacters, optional shell fallback), and an execution timeout (`IQRA_SYSTEM_TIMEOUT_MS`). The user-facing experience defaults to Arabic with an `IQRA_OUTPUT_LANG` toggle. Logging UX has been polished with a `--log-file` flag (overrides `IQRA_LOG_FILE`) and examples for text/JSON output. REPL now persists command history across sessions (Windows: `%APPDATA%\\iqra\\history.txt`).
 
 ## Key changes
 
@@ -14,13 +14,13 @@ Security hardening and Arabic-first UX are included: a filesystem sandbox (`IQRA
 - Arabic punctuation and UX: lexer recognizes `،` and `؛`; parser accepts them as separators; Arabic is default output; `IQRA_OUTPUT_LANG` toggles AR/EN.
 - Built-ins: File/system/env built-ins registered and callable from scripts with Arabic aliases; semantics aligned across platforms.
 - CI workflows run fmt, clippy (deny warnings), tests, and cargo-audit; weekly security audit and coverage workflow enabled.
-- Docs updated in `README.md`, `docs/BUILTINS_AR.md`, `docs/BUILTINS_EN.md`, and examples.
+- Docs updated in `README.md`, `docs/BUILTINS_AR.md`, `docs/BUILTINS_EN.md`, and examples. Logging docs now include `--log-file` usage and precedence notes.
 
 ## Migration notes for reviewers
 
 Any code that previously relied on a global executor must now construct the runtime with an executor: `let mut rt = Runtime::new_with_executor(default_system_executor());`
 
-To enable shell fallback intentionally, set `IQRA_ALLOW_SHELL_FALLBACK=1`. To constrain file access, set `IQRA_FS_ROOT` to a safe directory. To bound command runtime, set `IQRA_SYSTEM_TIMEOUT_MS` (milliseconds).
+To enable shell fallback intentionally, set `IQRA_ALLOW_SHELL_FALLBACK=1`. To constrain file access, set `IQRA_FS_ROOT` to a safe directory. To bound command runtime, set `IQRA_SYSTEM_TIMEOUT_MS` (milliseconds). To write logs to a file, prefer the `--log-file` flag (takes precedence over `IQRA_LOG_FILE`).
 
 ## Review checklist
 
@@ -28,6 +28,7 @@ To enable shell fallback intentionally, set `IQRA_ALLOW_SHELL_FALLBACK=1`. To co
 - [ ] Clippy passes with -D warnings.
 - [ ] Tests pass on all platforms (CI will run on ubuntu/windows/macos).
 - [ ] Documentation updated (`README.md`, `docs/BUILTINS_AR.md`, `docs/BUILTINS_EN.md`, `CONTRIBUTING.md` where relevant).
+- [ ] Logging docs reflect `--log-file` and precedence; REPL history noted.
 
 ## How I tested locally
 

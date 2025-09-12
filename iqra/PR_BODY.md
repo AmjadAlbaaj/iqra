@@ -1,6 +1,6 @@
-# chore: DI SystemExecutor, Arabic-first UX, sandbox + timeout
+# chore: DI SystemExecutor, Arabic-first UX, sandbox + timeout, logging flag, REPL history
 
-This PR removes the global system executor in favor of dependency injection, makes the UX Arabic-first, and hardens system/file operations with a sandbox and timeouts. It prepares the project for PR review with clean CI and updated documentation.
+This PR removes the global system executor in favor of dependency injection, makes the UX Arabic-first, and hardens system/file operations with a sandbox and timeouts. It also adds a `--log-file` flag (overrides `IQRA_LOG_FILE`) with examples for text/JSON logging, and persists REPL command history across sessions (Windows: `%APPDATA%\\iqra\\history.txt`). It prepares the project for PR review with clean CI and updated documentation.
 
 ## Summary of changes
 
@@ -10,6 +10,8 @@ This PR removes the global system executor in favor of dependency injection, mak
 - Built-ins: File (`read_file`/`write_file`/`list_files`), system (`system`/`system_with_io`/`system_info`), env (`env_var`) registered and callable; Arabic aliases documented.
 - Behavior fixes: `len/length/طول` over strings/lists/maps; list utilities semantics aligned; Windows path handling improved in lexer.
 - Docs: README Security section; `docs/BUILTINS_AR.md` and `docs/BUILTINS_EN.md` expanded; examples updated for sandbox/timeout.
+- Logging UX: `--log-file` flag (precedes `IQRA_LOG_FILE`); docs updated; tests added for precedence and file logging.
+- REPL: command history persistence across sessions.
 - CI: format, clippy (deny warnings), tests, `cargo-audit`; weekly audit and coverage workflow.
 
 ## Local checks performed
@@ -18,6 +20,7 @@ This PR removes the global system executor in favor of dependency injection, mak
 - `cargo clippy --all-targets --all-features -- -D warnings`
 - `cargo test --all`
 - `cargo audit --deny warnings`
+- Verified logging docs and examples for `--log-file` precedence and JSON/text modes
 
 ## Migration notes for reviewers
 
