@@ -4,35 +4,37 @@
 
 This branch removes the old global system executor API and replaces it with a per-instance `SystemExecutor` injected into `Runtime` via `Runtime::new_with_executor`. The change improves testability and reduces global mutable state.
 
-Additionally, it introduces Arabic punctuation support and aligns built-in `len/طول` behavior across core types.
+Security hardening and Arabic-first UX are included: a filesystem sandbox (`IQRA_FS_ROOT`), safer system execution (allow-list, forbidden metacharacters, optional shell fallback), and an execution timeout (`IQRA_SYSTEM_TIMEOUT_MS`). The user-facing experience defaults to Arabic with an `IQRA_OUTPUT_LANG` toggle.
 
 ## Key changes
 
 - Introduced `SystemExecutor` trait and `default_system_executor()` factory.
 - `Runtime` now stores a `Box<dyn SystemExecutor>` and exposes `Runtime::new_with_executor`.
-- Shell fallback is now opt-in via the `IQRA_ALLOW_SHELL_FALLBACK` environment variable; tests added.
-- Arabic punctuation: lexer recognizes `،` and `؛`; parser accepts them as statement separators.
-- Built-in `len`/`length`/`طول` now supports strings, lists, and maps; tests added.
-- CI workflows run fmt, clippy (deny warnings), tests, and cargo-audit; weekly security audit enabled.
-- Docs updated in `README.md`, `DOCS_AR.md`, `DOCS_EN.md`.
+- Security: Filesystem sandbox via `IQRA_FS_ROOT`; command allow-list and forbidden metacharacters; shell fallback gated by `IQRA_ALLOW_SHELL_FALLBACK`; command timeout via `IQRA_SYSTEM_TIMEOUT_MS` (timed-out commands return empty output).
+- Arabic punctuation and UX: lexer recognizes `،` and `؛`; parser accepts them as separators; Arabic is default output; `IQRA_OUTPUT_LANG` toggles AR/EN.
+- Built-ins: File/system/env built-ins registered and callable from scripts with Arabic aliases; semantics aligned across platforms.
+- CI workflows run fmt, clippy (deny warnings), tests, and cargo-audit; weekly security audit and coverage workflow enabled.
+- Docs updated in `README.md`, `docs/BUILTINS_AR.md`, `docs/BUILTINS_EN.md`, and examples.
 
 ## Migration notes for reviewers
 
 Any code that previously relied on a global executor must now construct the runtime with an executor: `let mut rt = Runtime::new_with_executor(default_system_executor());`
 
-To enable shell fallback intentionally, set `IQRA_ALLOW_SHELL_FALLBACK=1`.
+To enable shell fallback intentionally, set `IQRA_ALLOW_SHELL_FALLBACK=1`. To constrain file access, set `IQRA_FS_ROOT` to a safe directory. To bound command runtime, set `IQRA_SYSTEM_TIMEOUT_MS` (milliseconds).
 
 ## Review checklist
 
 - [ ] Code is formatted (`cargo fmt --all -- --check`).
 - [ ] Clippy passes with -D warnings.
 - [ ] Tests pass on all platforms (CI will run on ubuntu/windows/macos).
-- [ ] Documentation updated (`DOCS_AR.md`, `CONTRIBUTING.md` where relevant).
+- [ ] Documentation updated (`README.md`, `docs/BUILTINS_AR.md`, `docs/BUILTINS_EN.md`, `CONTRIBUTING.md` where relevant).
 
 ## How I tested locally
 
 - Ran `cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all`.
+- Verified security-focused tests (sandbox, timeout) and Windows path handling.
 
 ## Notes
 
 - The concrete `DefaultSystemExecutor` type remains private; use the public factory `default_system_executor()` or inject mocks via `Runtime::new_with_executor`.
+- Timeouts return an empty output string by design to avoid surprising script failures.

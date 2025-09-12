@@ -59,4 +59,18 @@
 - `نفذ_أمر(cmd)` (EN: `system`), `نفذ_أمر_بمدخل(cmd, input)` (EN: `system_with_io`), `معلومات_النظام()` (EN: `system_info`).
 - الرجوع إلى الصدفة (shell fallback) معطّل افتراضياً. لتفعيله — مثلاً لأوامر مثل `dir` على ويندوز — اضبط المتغير `IQRA_ALLOW_SHELL_FALLBACK=1`. ما يزال التنفيذ يفرض قائمة بيضاء ويرفض الرموز الخطرة.
 
+السلوك والأمان:
+
+- الأوامر المسموحة: `echo`, `dir`, `type`, `ls`, `cat`, `findstr`, `grep`, `whoami`, `hostname`, `date`, `time`, `ping`, `sleep`.
+- الرموز المحظورة: يتم رفض `&`, `|`, `;`, `>`, `<` داخل الأوامر.
+- المهلة الزمنية: إذا تم ضبط `IQRA_SYSTEM_TIMEOUT_MS` وتم تجاوزها، يتم إنهاء العملية ويُعاد نص فارغ بدلاً من إلقاء خطأ داخل السكربت لضمان عدم التعليق.
+
+مثال (PowerShell):
+
+```powershell
+$env:IQRA_SYSTEM_TIMEOUT_MS = "200"
+cargo run -- run --code "print system('ping 127.0.0.1 -n 5')"
+Remove-Item Env:IQRA_SYSTEM_TIMEOUT_MS
+```
+
 نصيحة: فضّل الدوال المدمجة الخالصة على أوامر النظام للسلامة وقابلية النقل.

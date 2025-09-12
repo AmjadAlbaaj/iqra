@@ -58,4 +58,18 @@ Note: Statement separators accept both `,` and the Arabic comma `،`. Statement 
 - `system(cmd)` (Arabic: `نفذ_أمر`), `system_with_io(cmd, input)` (Arabic: `نفذ_أمر_بمدخل`), `system_info()` (Arabic: `معلومات_النظام`).
 - Shell fallback is disabled by default. To allow shell-only commands (like Windows `dir`), set environment variable `IQRA_ALLOW_SHELL_FALLBACK=1`. Execution still enforces an allow-list of simple commands and rejects dangerous symbols.
 
+Behavior and safety:
+
+- Allowed commands: `echo`, `dir`, `type`, `ls`, `cat`, `findstr`, `grep`, `whoami`, `hostname`, `date`, `time`, `ping`, `sleep`.
+- Forbidden symbols: `&`, `|`, `;`, `>`, `<` are rejected in commands.
+- Timeout: if `IQRA_SYSTEM_TIMEOUT_MS` is set, overrunning processes are killed and an empty string is returned (no error thrown into the script) so execution does not hang.
+
+Examples (PowerShell):
+
+```powershell
+$env:IQRA_SYSTEM_TIMEOUT_MS = "200"
+cargo run -- run --code "print system('ping 127.0.0.1 -n 5')"
+Remove-Item Env:IQRA_SYSTEM_TIMEOUT_MS
+```
+
 Tip: Prefer pure built-ins over system calls in scripts intended to be portable and safe.

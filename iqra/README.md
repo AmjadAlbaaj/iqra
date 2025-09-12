@@ -110,6 +110,55 @@ while x < 3 {
 
 ---
 
+## الأمان | Security
+
+- `IQRA_FS_ROOT`: يحدد جذر مساحة العمل المسموح به لعمليات الملفات. أي مسار خارج هذا الجذر سيتم رفضه.
+
+  - مثال (PowerShell):
+
+    ```powershell
+    $env:IQRA_FS_ROOT = "C:\\Users\\baaj\\workspace"
+    cargo run -- run --code "print read_file('C:/Users/baaj/workspace/file.txt')"
+    Remove-Item Env:IQRA_FS_ROOT
+    ```
+
+- `IQRA_SYSTEM_TIMEOUT_MS`: يحدد حدًا أقصى بالميلي ثانية لتنفيذ أوامر النظام عبر الدوال المدمجة. إذا تجاوز الأمر المدة سيتم إنهاؤه ويُعاد ناتج فارغ للنص (بدون إلقاء خطأ داخل السكربت) لضمان عدم تعليق التنفيذ.
+
+  - مثال:
+
+    ```powershell
+    $env:IQRA_SYSTEM_TIMEOUT_MS = "200"
+    cargo run -- run --code "print system('ping 127.0.0.1 -n 5')"
+    Remove-Item Env:IQRA_SYSTEM_TIMEOUT_MS
+    ```
+
+ملاحظات:
+
+- لا يتم استخدام الصدفة (shell) إلا إذا لم يُعثر على البرنامج وكان `IQRA_ALLOW_SHELL_FALLBACK=1`.
+- لا تزال قائمة الأوامر المسموحة والرموز المحظورة مفعلة لتقليل المخاطر. الأوامر المسموحة افتراضيًا: `echo`, `dir`, `type`, `ls`, `cat`, `findstr`, `grep`, `whoami`, `hostname`, `date`, `time`, `ping`, `sleep`.
+
+### دوال الملفات والنظام | File and System Built-ins
+
+- ملفات:
+  - `read_file(path)` / `اقرأ_ملف(path)`
+  - `write_file(path, content)` / `اكتب_ملف(path, content)`
+  - `list_files(dir)` / `قائمة_ملفات(dir)`
+
+  أمثلة:
+
+  ```powershell
+  cargo run -- run --code "print read_file('C:/tmp/hello.txt')"
+  cargo run -- run --code "print write_file('C:/tmp/hello.txt', 'hi')"
+  cargo run -- run --code "print list_files('C:/tmp')"
+  ```
+
+- النظام:
+  - `system(cmd)` / `نفذ_أمر(cmd)`
+  - `system_with_io(cmd, input)` / `نفذ_أمر_بمدخل(cmd, input)`
+  - `system_info()` / `معلومات_النظام()`
+
+---
+
 ## المساهمة | Contributing
 
 مرحبًا بمساهماتك! راجع `CONTRIBUTING.md` و`CODE_OF_CONDUCT.md`.

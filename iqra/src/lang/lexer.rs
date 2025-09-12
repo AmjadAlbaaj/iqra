@@ -101,7 +101,14 @@ pub fn lex(input: &str) -> Result<Vec<Token>> {
                         }
                         _ => {
                             if escaped {
-                                buf.push(c2);
+                                // لا نترجم \n/\r/\t افتراضياً للحفاظ على مسارات Windows
+                                // نسمح فقط بهروب نفس علامة الاقتباس أو الباك-سلاش
+                                if c2 == '\\' || c2 == quote {
+                                    buf.push(c2);
+                                } else {
+                                    buf.push('\\');
+                                    buf.push(c2);
+                                }
                                 escaped = false;
                             } else {
                                 buf.push(c2);

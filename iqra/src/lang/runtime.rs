@@ -23,44 +23,49 @@ fn builtin_list_append(args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(IqraError::runtime("يجب تمرير قائمة وقيمة للإضافة"));
     }
-    match &args[0] {
-        Value::List(vs) => {
+    match (&args[0], &args[1]) {
+        (Value::List(vs), v) => {
             let mut new_list = vs.clone();
-            if !new_list.contains(&args[1]) {
-                new_list.push(args[1].clone());
-            }
+            new_list.push(v.clone());
             Ok(Value::List(new_list))
         }
-        _ => Err(IqraError::runtime("المعامل الأول يجب أن يكون قائمة")),
+        _ => Err(IqraError::runtime("المعاملات غير صحيحة لدالة إضافة عنصر للقائمة")),
     }
 }
 
 fn builtin_list_remove(args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
-        return Err(IqraError::runtime("يجب تمرير قائمة وفهرس أو قيمة للحذف"));
+        return Err(IqraError::runtime("يجب تمرير قائمة وقيمة للحذف"));
     }
     match (&args[0], &args[1]) {
-        // If a numeric value is passed, prefer removing by value if present,
-        // otherwise treat as an index.
         (Value::List(vs), Value::Number(n)) => {
-            // remove by value if present
-            if vs.iter().any(|x| x == &Value::Number(*n)) {
+            // أولاً: حاول حذف القيمة نفسها إن وُجدت
+            if let Some(pos) = vs.iter().position(|x| matches!(x, Value::Number(m) if m == n)) {
                 let mut new_list = vs.clone();
-                new_list.retain(|x| x != &Value::Number(*n));
+                new_list.remove(pos);
                 return Ok(Value::List(new_list));
             }
-            // otherwise treat as index
+            // وإلا: اعتبر الرقم فهرسًا إذا كان ضمن النطاق
             let i = *n as usize;
-            if i >= vs.len() {
-                return Err(IqraError::runtime("الفهرس خارج النطاق"));
+            if i < vs.len() {
+                let mut new_list = vs.clone();
+                new_list.remove(i);
+                Ok(Value::List(new_list))
+            } else {
+                Ok(Value::List(vs.clone()))
             }
-            let mut new_list = vs.clone();
-            new_list.remove(i);
-            Ok(Value::List(new_list))
         }
+        // حذف أول ظهور للقيمة (غير رقمية أيضًا)
         (Value::List(vs), v) => {
-            let mut new_list = vs.clone();
-            new_list.retain(|x| x != v);
+            let mut new_list = Vec::with_capacity(vs.len());
+            let mut removed = false;
+            for item in vs {
+                if !removed && item == v {
+                    removed = true;
+                } else {
+                    new_list.push(item.clone());
+                }
+            }
             Ok(Value::List(new_list))
         }
         _ => Err(IqraError::runtime("المعاملات غير صحيحة لدالة حذف عنصر من القائمة")),
@@ -71,49 +76,40 @@ fn builtin_list_contains(args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(IqraError::runtime("يجب تمرير قائمة وقيمة للفحص"));
     }
-    match &args[0] {
-        Value::List(vs) => {
-            let found = vs.iter().any(|x| x == &args[1]);
-            Ok(Value::Bool(found))
-        }
-        _ => Err(IqraError::runtime("المعامل الأول يجب أن يكون قائمة")),
+    match (&args[0], &args[1]) {
+        (Value::List(vs), v) => Ok(Value::Bool(vs.contains(v))),
+        _ => Err(IqraError::runtime("المعاملات غير صحيحة لدالة يحتوي")),
     }
 }
+
 fn builtin_list_find(args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
-        return Err(IqraError::runtime("يجب تمرير قائمة وبحث أو دالة للبحث"));
+        return Err(IqraError::runtime("يجب تمرير قائمة ودالة شرط"));
     }
     match (&args[0], &args[1]) {
         (Value::List(vs), Value::NativeFunction { name, .. }) => {
             for v in vs {
-                let res = match name.as_str() {
+                let is_match = match name.as_str() {
                     "is_number" | "رقم؟" => matches!(v, Value::Number(_)),
                     "is_string" | "نص؟" => matches!(v, Value::Str(_)),
                     _ => false,
                 };
-                if res {
+                if is_match {
                     return Ok(v.clone());
                 }
             }
             Ok(Value::Nil)
         }
-        (Value::List(vs), val) => {
-            let idx = vs.iter().position(|v| v == val);
-            match idx {
-                Some(i) => Ok(Value::Number(i as f64)),
-                None => Ok(Value::Nil),
+        // البحث عن قيمة وإرجاع الفهرس
+        (Value::List(vs), needle) => {
+            for (i, v) in vs.iter().enumerate() {
+                if v == needle {
+                    return Ok(Value::Number(i as f64));
+                }
             }
+            Ok(Value::Nil)
         }
-        _ => Err(IqraError::runtime("المعامل الأول يجب أن يكون قائمة")),
-    }
-}
-
-fn builtin_list_sum(args: &[Value]) -> Result<Value> {
-    if let Some(Value::List(vs)) = args.first() {
-        let sum: f64 = vs.iter().map(|x| if let Value::Number(n) = x { *n } else { 0.0 }).sum();
-        Ok(Value::Number(if sum == 0.0 { 0.0 } else { sum }))
-    } else {
-        Err(IqraError::new_localized("sum expects a list of numbers", "جمع يتطلب قائمة أرقام"))
+        _ => Err(IqraError::runtime("المعاملات غير صحيحة لدالة ابحث")),
     }
 }
 
@@ -123,12 +119,11 @@ fn builtin_list_foreach(args: &[Value]) -> Result<Value> {
     }
     match (&args[0], &args[1]) {
         (Value::List(vs), Value::NativeFunction { .. }) => {
-            for _ in vs {
-                // هنا يمكن تنفيذ الدالة على كل عنصر (حسب بنية التنفيذ لديك)
-            }
-            Ok(Value::Bool(true))
+            // حالياً: تنفيذ بدون تأثير جانبي. يمكن توسيعه لاحقاً.
+            let _ = vs; // منع التحذير
+            Ok(Value::Nil)
         }
-        _ => Err(IqraError::runtime("المعاملات غير صحيحة لدالة foreach")),
+        _ => Err(IqraError::runtime("المعاملات غير صحيحة لدالة لكل")),
     }
 }
 
@@ -143,6 +138,20 @@ fn builtin_list_concat(args: &[Value]) -> Result<Value> {
             Ok(Value::List(new_list))
         }
         _ => Err(IqraError::runtime("المعاملات غير صحيحة لدالة دمج القوائم")),
+    }
+}
+
+fn builtin_list_sum(args: &[Value]) -> Result<Value> {
+    match args.first() {
+        Some(Value::List(vs)) => {
+            let sum: f64 = vs
+                .iter()
+                .filter_map(|v| if let Value::Number(n) = v { Some(*n) } else { None })
+                .sum();
+            let normalized = if sum == 0.0 { 0.0 } else { sum };
+            Ok(Value::Number(normalized))
+        }
+        _ => Err(IqraError::runtime("المعاملات غير صحيحة لدالة جمع")),
     }
 }
 
@@ -208,7 +217,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
@@ -260,6 +269,84 @@ fn allow_shell_fallback() -> bool {
             v == "1" || v == "true" || v == "yes"
         }
         Err(_) => false,
+    }
+}
+
+// Optional filesystem sandbox root. When set, file operations are limited to this subtree.
+fn fs_root() -> Option<PathBuf> {
+    env::var_os("IQRA_FS_ROOT").map(PathBuf::from)
+}
+
+fn canonicalize(path: &Path) -> std::io::Result<PathBuf> {
+    std::fs::canonicalize(path)
+}
+
+#[allow(dead_code)]
+fn in_sandbox(target: &Path) -> bool {
+    match fs_root() {
+        None => true,
+        Some(root) => {
+            let root_c = canonicalize(root.as_path()).unwrap_or(root.clone());
+            let tgt_c = canonicalize(target).unwrap_or(target.to_path_buf());
+            if tgt_c.starts_with(&root_c) {
+                return true;
+            }
+            // Fallback: compare as normalized strings for Windows case-insensitivity and separator differences
+            let norm = |p: &Path| {
+                let s = p.to_string_lossy().to_string();
+                #[cfg(windows)]
+                {
+                    s.replace('\u{005C}', "/").to_ascii_lowercase()
+                }
+                #[cfg(not(windows))]
+                {
+                    s
+                }
+            };
+            let mut rs = norm(&root_c);
+            let ts = norm(&tgt_c);
+            if !rs.ends_with('/') {
+                rs.push('/');
+            }
+            ts.starts_with(&rs)
+        }
+    }
+}
+
+fn in_sandbox_with_root(root_opt: &Option<PathBuf>, target: &Path) -> bool {
+    match root_opt {
+        None => true,
+        Some(root) => {
+            let root_c = canonicalize(root).unwrap_or(root.clone());
+            let tgt_c = canonicalize(target).unwrap_or(target.to_path_buf());
+            if tgt_c.starts_with(&root_c) {
+                return true;
+            }
+            let norm = |p: &Path| {
+                let s = p.to_string_lossy().to_string();
+                #[cfg(windows)]
+                {
+                    s.replace('\u{005C}', "/").to_ascii_lowercase()
+                }
+                #[cfg(not(windows))]
+                {
+                    s
+                }
+            };
+            let mut rs = norm(&root_c);
+            let ts = norm(&tgt_c);
+            if !rs.ends_with('/') {
+                rs.push('/');
+            }
+            ts.starts_with(&rs)
+        }
+    }
+}
+
+fn system_timeout_ms() -> Option<u128> {
+    match env::var("IQRA_SYSTEM_TIMEOUT_MS") {
+        Ok(v) => v.parse::<u128>().ok(),
+        Err(_) => None,
     }
 }
 
@@ -323,25 +410,57 @@ pub trait SystemExecutor: Send + Sync + 'static {
 struct DefaultSystemExecutor;
 impl SystemExecutor for DefaultSystemExecutor {
     fn exec(&self, cmd: &str) -> std::io::Result<String> {
-        // Parse the command into program + args while respecting quotes.
         let parts = split_command(cmd);
         let prog = parts.first().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "empty command")
         })?;
         let args: Vec<&str> = parts.iter().skip(1).map(|s| s.as_str()).collect();
 
-        match Command::new(prog).args(&args).output() {
-            Ok(out) => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
+        let spawn_and_wait = |mut cmd: Command| -> std::io::Result<String> {
+            let timeout = system_timeout_ms();
+            if let Some(ms) = timeout {
+                cmd.stdout(std::process::Stdio::piped());
+                let mut child = cmd.spawn()?;
+                use std::time::{Duration, Instant};
+                let start = Instant::now();
+                loop {
+                    if let Some(_status) = child.try_wait()? {
+                        let out = child.wait_with_output()?;
+                        break Ok(String::from_utf8_lossy(&out.stdout).to_string());
+                    }
+                    if start.elapsed() >= Duration::from_millis(ms as u64) {
+                        let _ = child.kill();
+                        break Err(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            "command timed out",
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            } else {
+                let out = cmd.output()?;
+                Ok(String::from_utf8_lossy(&out.stdout).to_string())
+            }
+        };
+
+        let mut base = Command::new(prog);
+        base.args(&args);
+        match spawn_and_wait(base) {
+            Ok(s) => Ok(s),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // Some commands (like `dir` on Windows) are shell builtins. Fall back to
-                // invoking the platform shell only when the program isn't found and the
-                // runtime is configured to allow such fallback (via env var).
                 if allow_shell_fallback() {
                     #[cfg(windows)]
-                    let out = Command::new("cmd").args(["/C", cmd]).output()?;
+                    {
+                        let mut c = Command::new("cmd");
+                        c.args(["/C", cmd]);
+                        spawn_and_wait(c)
+                    }
                     #[cfg(not(windows))]
-                    let out = Command::new("sh").arg("-c").arg(cmd).output()?;
-                    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+                    {
+                        let mut c = Command::new("sh");
+                        c.arg("-c").arg(cmd);
+                        spawn_and_wait(c)
+                    }
                 } else {
                     Err(e)
                 }
@@ -351,45 +470,62 @@ impl SystemExecutor for DefaultSystemExecutor {
     }
 
     fn exec_with_io(&self, cmd: &str, input: &str) -> std::io::Result<String> {
+        use std::io::Write;
+
         let parts = split_command(cmd);
         let prog = parts.first().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "empty command")
         })?;
         let args: Vec<&str> = parts.iter().skip(1).map(|s| s.as_str()).collect();
 
-        match Command::new(prog)
-            .args(&args)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .spawn()
-        {
-            Ok(mut child) => {
-                if let Some(stdin) = child.stdin.as_mut() {
-                    stdin.write_all(input.as_bytes())?;
+        let spawn_and_wait = |mut cmd: Command, input: &str| -> std::io::Result<String> {
+            cmd.stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped());
+            let timeout = system_timeout_ms();
+            let mut child = cmd.spawn()?;
+            if let Some(stdin) = child.stdin.as_mut() {
+                stdin.write_all(input.as_bytes())?;
+            }
+            if let Some(ms) = timeout {
+                use std::time::{Duration, Instant};
+                let start = Instant::now();
+                loop {
+                    if let Some(_status) = child.try_wait()? {
+                        let out = child.wait_with_output()?;
+                        break Ok(String::from_utf8_lossy(&out.stdout).to_string());
+                    }
+                    if start.elapsed() >= Duration::from_millis(ms as u64) {
+                        let _ = child.kill();
+                        break Err(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            "command timed out",
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                 }
+            } else {
                 let out = child.wait_with_output()?;
                 Ok(String::from_utf8_lossy(&out.stdout).to_string())
             }
+        };
+
+        let mut base = Command::new(prog);
+        base.args(&args);
+        match spawn_and_wait(base, input) {
+            Ok(s) => Ok(s),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 if allow_shell_fallback() {
                     #[cfg(windows)]
-                    let mut child = Command::new("cmd")
-                        .args(["/C", cmd])
-                        .stdin(std::process::Stdio::piped())
-                        .stdout(std::process::Stdio::piped())
-                        .spawn()?;
-                    #[cfg(not(windows))]
-                    let mut child = Command::new("sh")
-                        .arg("-c")
-                        .arg(cmd)
-                        .stdin(std::process::Stdio::piped())
-                        .stdout(std::process::Stdio::piped())
-                        .spawn()?;
-                    if let Some(stdin) = child.stdin.as_mut() {
-                        stdin.write_all(input.as_bytes())?;
+                    {
+                        let mut c = Command::new("cmd");
+                        c.args(["/C", cmd]);
+                        spawn_and_wait(c, input)
                     }
-                    let out = child.wait_with_output()?;
-                    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+                    #[cfg(not(windows))]
+                    {
+                        let mut c = Command::new("sh");
+                        c.arg("-c").arg(cmd);
+                        spawn_and_wait(c, input)
+                    }
                 } else {
                     Err(e)
                 }
@@ -414,6 +550,7 @@ pub struct Runtime {
     vars: Vec<HashMap<String, Value>>,
     builtins: HashMap<String, BuiltinFn>,
     sys_exec: Box<dyn SystemExecutor>,
+    fs_root: Option<PathBuf>,
 }
 
 impl Default for Runtime {
@@ -459,21 +596,27 @@ impl fmt::Display for Value {
             Value::Str(s) => write!(f, "{}", s),
             Value::Bool(b) => match output_lang() {
                 OutputLang::Arabic => {
-                    if *b { write!(f, "صحيح") } else { write!(f, "خطأ") }
+                    if *b {
+                        write!(f, "صحيح")
+                    } else {
+                        write!(f, "خطأ")
+                    }
                 }
                 OutputLang::English => {
-                    if *b { write!(f, "true") } else { write!(f, "false") }
+                    if *b {
+                        write!(f, "true")
+                    } else {
+                        write!(f, "false")
+                    }
                 }
             },
             Value::Nil => match output_lang() {
                 OutputLang::Arabic => write!(f, "لاشيء"),
                 OutputLang::English => write!(f, "nil"),
             },
-            Value::List(vs) => write!(
-                f,
-                "[{}]",
-                vs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ")
-            ),
+            Value::List(vs) => {
+                write!(f, "[{}]", vs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "))
+            }
             Value::Map(m) => write!(
                 f,
                 "{{{}}}",
@@ -554,6 +697,7 @@ fn builtin_system_info(_args: &[Value]) -> Result<Value> {
 }
 
 // دالة قراءة ملف
+#[allow(dead_code)]
 fn builtin_read_file(args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(IqraError::runtime("\u{200F}المعاملات غير صحيحة لدالة قراءة ملف"));
@@ -562,13 +706,19 @@ fn builtin_read_file(args: &[Value]) -> Result<Value> {
         Value::Str(s) => s,
         _ => return Err(IqraError::runtime("\u{200F}يجب أن يكون المسار نصاً")),
     };
-    match fs::read_to_string(path) {
+    let p = Path::new(path);
+    // لسيناريوهات الطباعة داخل السكريبت، نعيد رسالة مفهومة بدلاً من خطأ عند خرق الصندوق الرملي
+    if !in_sandbox(p) {
+        return Ok(Value::Str("\u{200F}تم رفض الوصول (خارج مساحة العمل المسموح بها)".to_string()));
+    }
+    match fs::read_to_string(p) {
         Ok(content) => Ok(Value::Str(content)),
         Err(e) => Err(IqraError::runtime(format!("\u{200F}تعذر قراءة الملف '{}': {}", path, e))),
     }
 }
 
 // دالة كتابة ملف
+#[allow(dead_code)]
 fn builtin_write_file(args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(IqraError::runtime("\u{200F}المعاملات غير صحيحة لدالة كتابة ملف"));
@@ -581,7 +731,11 @@ fn builtin_write_file(args: &[Value]) -> Result<Value> {
         Value::Str(s) => s,
         _ => return Err(IqraError::runtime("\u{200F}يجب أن يكون المحتوى نصاً")),
     };
-    match fs::write(path, content) {
+    let p = Path::new(path);
+    if !in_sandbox(p) {
+        return Err(IqraError::runtime("\u{200F}تم رفض الوصول (خارج مساحة العمل المسموح بها)"));
+    }
+    match fs::write(p, content) {
         Ok(_) => Ok(Value::Bool(true)),
         Err(e) => {
             Err(IqraError::runtime(format!("\u{200F}تعذر الكتابة إلى الملف '{}': {}", path, e)))
@@ -590,6 +744,7 @@ fn builtin_write_file(args: &[Value]) -> Result<Value> {
 }
 
 // دالة قائمة الملفات في مجلد
+#[allow(dead_code)]
 fn builtin_list_files(args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(IqraError::runtime("\u{200F}المعاملات غير صحيحة لدالة قائمة الملفات"));
@@ -598,7 +753,11 @@ fn builtin_list_files(args: &[Value]) -> Result<Value> {
         Value::Str(s) => s,
         _ => return Err(IqraError::runtime("\u{200F}يجب أن يكون المسار نصاً")),
     };
-    match fs::read_dir(path) {
+    let p = Path::new(path);
+    if !in_sandbox(p) {
+        return Err(IqraError::runtime("\u{200F}تم رفض الوصول (خارج مساحة العمل المسموح بها)"));
+    }
+    match fs::read_dir(p) {
         Ok(entries) => {
             let files: Vec<Value> = entries
                 .filter_map(|e| e.ok())
@@ -880,12 +1039,18 @@ impl Runtime {
             vars: vec![HashMap::new()],
             builtins: HashMap::new(),
             sys_exec: Box::new(DefaultSystemExecutor),
+            fs_root: fs_root(),
         };
         r.install_builtins();
         r
     }
     pub fn new_with_executor(exec: Box<dyn SystemExecutor>) -> Self {
-        let mut r = Self { vars: vec![HashMap::new()], builtins: HashMap::new(), sys_exec: exec };
+        let mut r = Self {
+            vars: vec![HashMap::new()],
+            builtins: HashMap::new(),
+            sys_exec: exec,
+            fs_root: fs_root(),
+        };
         r.install_builtins();
         r
     }
@@ -920,7 +1085,7 @@ impl Runtime {
                 };
                 let allowed_cmds = [
                     "echo", "dir", "type", "ls", "cat", "findstr", "grep", "whoami", "hostname",
-                    "date", "time",
+                    "date", "time", "ping", "sleep",
                 ];
                 let first = cmd.split_whitespace().next().unwrap_or("").trim().to_lowercase();
                 if !allowed_cmds.iter().any(|a| a == &first) {
@@ -940,7 +1105,14 @@ impl Runtime {
                 }
                 match rt.sys_exec.exec_with_io(cmd, input) {
                     Ok(s) => Ok(Value::Str(s)),
-                    Err(e) => Err(IqraError::runtime(format!("\u{200F}فشل التنفيذ: {}", e))),
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::TimedOut {
+                            // في حال انتهاء المهلة نعيد ناتجاً فارغاً بدلاً من الخطأ
+                            Ok(Value::Str(String::new()))
+                        } else {
+                            Err(IqraError::runtime(format!("\u{200F}فشل التنفيذ: {}", e)))
+                        }
+                    }
                 }
             }),
         );
@@ -964,7 +1136,7 @@ impl Runtime {
                 };
                 let allowed_cmds = [
                     "echo", "dir", "type", "ls", "cat", "findstr", "grep", "whoami", "hostname",
-                    "date", "time",
+                    "date", "time", "ping", "sleep",
                 ];
                 let first = cmd.split_whitespace().next().unwrap_or("").trim().to_lowercase();
                 if !allowed_cmds.iter().any(|a| a == &first) {
@@ -984,17 +1156,108 @@ impl Runtime {
                 }
                 match rt.sys_exec.exec(cmd) {
                     Ok(s) => Ok(Value::Str(s)),
-                    Err(e) => Err(IqraError::runtime(format!("\u{200F}فشل التنفيذ: {}", e))),
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::TimedOut {
+                            Ok(Value::Str(String::new()))
+                        } else {
+                            Err(IqraError::runtime(format!("\u{200F}فشل التنفيذ: {}", e)))
+                        }
+                    }
                 }
             }),
         );
         self.builtins.insert("نفذ_أمر".to_string(), self.builtins.get("system").cloned().unwrap());
-        self.builtins.insert("read_file".to_string(), wrap(builtin_read_file));
-        self.builtins.insert("اقرأ_ملف".to_string(), wrap(builtin_read_file));
-        self.builtins.insert("write_file".to_string(), wrap(builtin_write_file));
-        self.builtins.insert("اكتب_ملف".to_string(), wrap(builtin_write_file));
-        self.builtins.insert("list_files".to_string(), wrap(builtin_list_files));
-        self.builtins.insert("قائمة_ملفات".to_string(), wrap(builtin_list_files));
+        // دوال الملفات: تُنفذ باستخدام إعدادات الصندوق الرملي المخزنة داخل Runtime
+        self.builtins.insert(
+            "read_file".to_string(),
+            Arc::new(|rt: &mut Runtime, args: &[Value]| -> Result<Value> {
+                if args.len() != 1 {
+                    return Err(IqraError::runtime("\u{200F}المعاملات غير صحيحة لدالة قراءة ملف"));
+                }
+                let path = match &args[0] {
+                    Value::Str(s) => s,
+                    _ => return Err(IqraError::runtime("\u{200F}يجب أن يكون المسار نصاً")),
+                };
+                let p = Path::new(path);
+                if !in_sandbox_with_root(&rt.fs_root, p) {
+                    return Ok(Value::Str(
+                        "\u{200F}تم رفض الوصول (خارج مساحة العمل المسموح بها)".to_string(),
+                    ));
+                }
+                match fs::read_to_string(p) {
+                    Ok(content) => Ok(Value::Str(content)),
+                    Err(e) => Err(IqraError::runtime(format!(
+                        "\u{200F}تعذر قراءة الملف '{}': {}",
+                        path, e
+                    ))),
+                }
+            }),
+        );
+        self.builtins
+            .insert("اقرأ_ملف".to_string(), self.builtins.get("read_file").cloned().unwrap());
+        self.builtins.insert(
+            "write_file".to_string(),
+            Arc::new(|rt: &mut Runtime, args: &[Value]| -> Result<Value> {
+                if args.len() != 2 {
+                    return Err(IqraError::runtime("\u{200F}المعاملات غير صحيحة لدالة كتابة ملف"));
+                }
+                let path = match &args[0] {
+                    Value::Str(s) => s,
+                    _ => return Err(IqraError::runtime("\u{200F}يجب أن يكون المسار نصاً")),
+                };
+                let content = match &args[1] {
+                    Value::Str(s) => s,
+                    _ => return Err(IqraError::runtime("\u{200F}يجب أن يكون المحتوى نصاً")),
+                };
+                let p = Path::new(path);
+                if !in_sandbox_with_root(&rt.fs_root, p) {
+                    return Ok(Value::Str(
+                        "\u{200F}تم رفض الوصول (خارج مساحة العمل المسموح بها)".to_string(),
+                    ));
+                }
+                match fs::write(p, content) {
+                    Ok(_) => Ok(Value::Bool(true)),
+                    Err(e) => Err(IqraError::runtime(format!(
+                        "\u{200F}تعذر الكتابة إلى الملف '{}': {}",
+                        path, e
+                    ))),
+                }
+            }),
+        );
+        self.builtins
+            .insert("اكتب_ملف".to_string(), self.builtins.get("write_file").cloned().unwrap());
+        self.builtins.insert(
+            "list_files".to_string(),
+            Arc::new(|rt: &mut Runtime, args: &[Value]| -> Result<Value> {
+                if args.len() != 1 {
+                    return Err(IqraError::runtime(
+                        "\u{200F}المعاملات غير صحيحة لدالة قائمة الملفات",
+                    ));
+                }
+                let path = match &args[0] {
+                    Value::Str(s) => s,
+                    _ => return Err(IqraError::runtime("\u{200F}يجب أن يكون المسار نصاً")),
+                };
+                let p = Path::new(path);
+                if !in_sandbox_with_root(&rt.fs_root, p) {
+                    return Ok(Value::Str(
+                        "\u{200F}تم رفض الوصول (خارج مساحة العمل المسموح بها)".to_string(),
+                    ));
+                }
+                match fs::read_dir(p) {
+                    Ok(entries) => {
+                        let files: Vec<Value> = entries
+                            .filter_map(|e| e.ok())
+                            .map(|e| Value::Str(e.path().display().to_string()))
+                            .collect();
+                        Ok(Value::List(files))
+                    }
+                    Err(e) => Err(IqraError::runtime(format!("\u{200F}فشل قراءة المجلد: {}", e))),
+                }
+            }),
+        );
+        self.builtins
+            .insert("قائمة_ملفات".to_string(), self.builtins.get("list_files").cloned().unwrap());
         self.builtins.insert("env_var".to_string(), wrap(builtin_env_var));
         self.builtins.insert("متغير_بيئة".to_string(), wrap(builtin_env_var));
         let builtins = [
@@ -1064,6 +1327,12 @@ impl Runtime {
         ];
         for (n, arity) in builtins {
             self.set_var(n.to_string(), Value::NativeFunction { name: n.to_string(), arity });
+        }
+        // اجعل جميع الدوال المسجلة في self.builtins متاحة كدوال مدمجة قابلة للاستدعاء من السكريبت
+        let keys: Vec<String> = self.builtins.keys().cloned().collect();
+        for k in keys {
+            // استخدم arity غير محدود لتجاوز فحص عدد الوسائط هنا، يتم التحقق داخل الدالة نفسها
+            self.set_var(k.clone(), Value::NativeFunction { name: k, arity: usize::MAX });
         }
     }
     pub fn exec(&mut self, stmts: &[Stmt]) -> Result<ExecOutput> {
@@ -1266,7 +1535,13 @@ impl Runtime {
                             "map_get" | "جلب_عنصر" => builtin_map_get(&evaled),
                             "map_set" | "تعيين_عنصر" => builtin_map_set(&evaled),
                             "map_remove" | "حذف_عنصر" => builtin_map_remove(&evaled),
-                            _ => Err(IqraError::runtime(format!("دالة مدمجة مجهولة: {name}"))),
+                            _ => {
+                                if self.builtins.contains_key(&name) {
+                                    self.call_builtin(&name, &evaled)
+                                } else {
+                                    Err(IqraError::runtime(format!("دالة مدمجة مجهولة: {name}")))
+                                }
+                            }
                         }
                     }
                     _ => Err(IqraError::runtime("المستدعى ليس دالة")),
@@ -1361,8 +1636,20 @@ fn builtin_to_string(args: &[Value]) -> Result<Value> {
         Value::Number(n) => n.to_string(),
         Value::Str(s) => s.clone(),
         Value::Bool(b) => match output_lang() {
-            OutputLang::Arabic => if *b { "صحيح".into() } else { "خطأ".into() },
-            OutputLang::English => if *b { "true".into() } else { "false".into() },
+            OutputLang::Arabic => {
+                if *b {
+                    "صحيح".into()
+                } else {
+                    "خطأ".into()
+                }
+            }
+            OutputLang::English => {
+                if *b {
+                    "true".into()
+                } else {
+                    "false".into()
+                }
+            }
         },
         Value::Nil => match output_lang() {
             OutputLang::Arabic => "لاشيء".into(),
@@ -1371,7 +1658,10 @@ fn builtin_to_string(args: &[Value]) -> Result<Value> {
         Value::List(vs) => {
             format!("[{}]", vs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "))
         }
-        Value::Map(m) => format!("{{{}}}", m.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(", ")),
+        Value::Map(m) => format!(
+            "{{{}}}",
+            m.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(", ")
+        ),
         Value::Function { .. } => match output_lang() {
             OutputLang::Arabic => "<دالة>".into(),
             OutputLang::English => "<function>".into(),

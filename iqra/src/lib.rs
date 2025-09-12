@@ -1,6 +1,7 @@
 pub mod diagnostics;
 pub mod error;
 pub mod lang;
+pub use lang::runtime::Runtime;
 
 /// Core greeting logic (placeholder for real domain logic)
 pub fn make_greeting(name: &str) -> String {
