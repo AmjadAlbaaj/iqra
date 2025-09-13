@@ -1,7 +1,38 @@
 use std::fmt;
+use crate::lang::runtime::IqraError;
+use anyhow::{Result, anyhow};
+
+// الدوال المساعدة يجب أن تكون هنا ليتمكن الـ impl من استخدامها
+fn is_arabic_digit(ch: char) -> bool {
+    matches!(ch, '٠'..='٩')
+}
+
+fn arabic_to_ascii_digit(ch: char) -> char {
+    match ch {
+        '٠' => '0',
+        '١' => '1',
+        '٢' => '2',
+        '٣' => '3',
+        '٤' => '4',
+        '٥' => '5',
+        '٦' => '6',
+        '٧' => '7',
+        '٨' => '8',
+        '٩' => '9',
+        _ => ch,
+    }
+}
+
+fn is_arabic_letter(ch: char) -> bool {
+    matches!(ch, '\u{0600}'..='\u{06FF}' | '\u{0750}'..='\u{077F}' | '\u{08A0}'..='\u{08FF}')
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    // Error handling keywords (Arabic and English)
+    Try,      // جرب / try
+    Catch,    // امسك / catch
+    Errors,   // أخطاء / errors
     // Literals
     Number(f64),
     String(String),
@@ -16,6 +47,8 @@ pub enum Token {
     And,   // و / && / and
     Or,    // أو / || / or
     Not,   // ليس / ! / not
+    Function, // دالة / function
+    Return,   // ارجع / return
 
     // Operators
     Plus,
@@ -46,6 +79,7 @@ pub enum Token {
     Eof,
 }
 
+// Display implementation for Token
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -60,6 +94,11 @@ impl fmt::Display for Token {
             Token::And => write!(f, "and"),
             Token::Or => write!(f, "or"),
             Token::Not => write!(f, "not"),
+            Token::Function => write!(f, "function"),
+            Token::Return => write!(f, "return"),
+            Token::Try => write!(f, "try"),
+            Token::Catch => write!(f, "catch"),
+            Token::Errors => write!(f, "errors"),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Multiply => write!(f, "*"),
@@ -86,21 +125,29 @@ impl fmt::Display for Token {
     }
 }
 
+
+#[derive(Debug)]
 pub struct Lexer {
     input: Vec<char>,
     position: usize,
     current_char: Option<char>,
+    line: usize,
 }
+
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
         let chars: Vec<char> = input.chars().collect();
         let current_char = chars.first().copied();
-        Self { input: chars, position: 0, current_char }
+        Self { input: chars, position: 0, current_char, line: 1 }
     }
+
 
     fn advance(&mut self) {
         self.position += 1;
+        if self.current_char == Some('\n') {
+            self.line += 1;
+        }
         self.current_char = self.input.get(self.position).copied();
     }
 
@@ -128,33 +175,40 @@ impl Lexer {
         }
     }
 
-    fn read_number(&mut self) -> f64 {
+    fn read_number(&mut self) -> Result<f64> {
         let mut num_str = String::new();
-
+        let start_line = self.line;
         while let Some(ch) = self.current_char {
             if ch.is_ascii_digit() || ch == '.' {
                 num_str.push(ch);
                 self.advance();
             } else if is_arabic_digit(ch) {
-                // Convert Arabic digits to ASCII
                 num_str.push(arabic_to_ascii_digit(ch));
                 self.advance();
             } else {
                 break;
             }
         }
-
-        num_str.parse().unwrap_or(0.0)
+        match num_str.parse() {
+            Ok(n) => Ok(n),
+            Err(_) => Err(anyhow!(IqraError {
+                kind: "خطأ في الرقم | Number Error".to_string(),
+                message_ar: format!("تعذر تحويل '{}' إلى رقم.", num_str),
+                message_en: format!("Failed to parse '{}' as a number.", num_str),
+                suggestion: Some("تأكد من صحة الرقم المدخل | Check the input number".to_string()),
+                line: Some(start_line),
+            }))
+        }
     }
 
-    fn read_string(&mut self) -> String {
+    fn read_string(&mut self) -> Result<String> {
         let mut string = String::new();
+        let start_line = self.line;
         self.advance(); // Skip opening quote
-
         while let Some(ch) = self.current_char {
             if ch == '"' {
                 self.advance(); // Skip closing quote
-                break;
+                return Ok(string);
             } else if ch == '\\' {
                 self.advance();
                 if let Some(escaped) = self.current_char {
@@ -176,8 +230,13 @@ impl Lexer {
                 self.advance();
             }
         }
-
-        string
+        Err(anyhow!(IqraError {
+            kind: "خطأ في السلسلة | String Error".to_string(),
+            message_ar: "سلسلة غير منتهية بعلامة اقتباس.".to_string(),
+            message_en: "Unterminated string literal.".to_string(),
+            suggestion: Some("تأكد من إغلاق السلسلة بعلامة اقتباس | Close the string with a quote".to_string()),
+            line: Some(start_line),
+        }))
     }
 
     fn read_identifier(&mut self) -> String {
@@ -195,26 +254,35 @@ impl Lexer {
         identifier
     }
 
-    pub fn next_token(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Result<Token> {
         loop {
             match self.current_char {
-                None => return Token::Eof,
+                None => return Ok(Token::Eof),
                 Some(ch) if ch.is_whitespace() && ch != '\n' => {
                     self.skip_whitespace();
+                    continue;
                 }
                 Some('\n') => {
                     self.advance();
-                    return Token::Newline;
+                    return Ok(Token::Newline);
                 }
                 Some(ch) if ch.is_ascii_digit() || is_arabic_digit(ch) => {
-                    return Token::Number(self.read_number());
+                    let n = self.read_number();
+                    match n {
+                        Ok(val) => return Ok(Token::Number(val)),
+                        Err(e) => return Err(e),
+                    }
                 }
                 Some('"') => {
-                    return Token::String(self.read_string());
+                    let s = self.read_string();
+                    match s {
+                        Ok(val) => return Ok(Token::String(val)),
+                        Err(e) => return Err(e),
+                    }
                 }
                 Some(ch) if ch.is_alphabetic() || ch == '_' || is_arabic_letter(ch) => {
                     let identifier = self.read_identifier();
-                    return match identifier.as_str() {
+                    let t = match identifier.as_str() {
                         // Arabic keywords
                         "اذا" | "إذا" => Token::If,
                         "وإلا" | "والا" | "وإلاّ" => Token::Else,
@@ -224,6 +292,10 @@ impl Lexer {
                         "و" => Token::And,
                         "أو" => Token::Or,
                         "ليس" => Token::Not,
+                        "دالة" => Token::Function,
+                        "ارجع" => Token::Return,
+                        "جرب" => Token::Try,
+                        "امسك" => Token::Catch,
 
                         // English keywords
                         "if" => Token::If,
@@ -234,148 +306,132 @@ impl Lexer {
                         "and" => Token::And,
                         "or" => Token::Or,
                         "not" => Token::Not,
+                        "function" => Token::Function,
+                        "return" => Token::Return,
+                        "try" => Token::Try,
+                        "catch" => Token::Catch,
 
                         _ => Token::Identifier(identifier),
                     };
+                    return Ok(t);
                 }
                 Some('+') => {
                     self.advance();
-                    return Token::Plus;
+                    return Ok(Token::Plus);
                 }
                 Some('-') => {
                     self.advance();
-                    return Token::Minus;
+                    return Ok(Token::Minus);
                 }
                 Some('*') => {
                     self.advance();
-                    return Token::Multiply;
+                    return Ok(Token::Multiply);
                 }
                 Some('/') => {
                     if self.peek() == Some('/') {
-                        // Line comment
                         self.skip_comment();
                         continue;
                     } else {
                         self.advance();
-                        return Token::Divide;
+                        return Ok(Token::Divide);
                     }
                 }
                 Some('%') => {
                     self.advance();
-                    return Token::Modulo;
+                    return Ok(Token::Modulo);
                 }
                 Some('=') => {
                     self.advance();
                     if self.current_char == Some('=') {
                         self.advance();
-                        return Token::Equal;
+                        return Ok(Token::Equal);
                     }
-                    return Token::Assign;
+                    return Ok(Token::Assign);
                 }
                 Some('!') => {
                     self.advance();
                     if self.current_char == Some('=') {
                         self.advance();
-                        return Token::NotEqual;
+                        return Ok(Token::NotEqual);
                     }
-                    return Token::Not;
+                    return Ok(Token::Not);
                 }
                 Some('<') => {
                     self.advance();
                     if self.current_char == Some('=') {
                         self.advance();
-                        return Token::LessEqual;
+                        return Ok(Token::LessEqual);
                     }
-                    return Token::Less;
+                    return Ok(Token::Less);
                 }
                 Some('>') => {
                     self.advance();
                     if self.current_char == Some('=') {
                         self.advance();
-                        return Token::GreaterEqual;
+                        return Ok(Token::GreaterEqual);
                     }
-                    return Token::Greater;
+                    return Ok(Token::Greater);
                 }
                 Some('&') => {
                     self.advance();
                     if self.current_char == Some('&') {
                         self.advance();
-                        return Token::And;
+                        return Ok(Token::And);
                     }
-                    // Single & is not supported, treat as identifier
-                    return Token::Identifier("&".to_string());
+                    return Ok(Token::Identifier("&".to_string()));
                 }
                 Some('|') => {
                     self.advance();
                     if self.current_char == Some('|') {
                         self.advance();
-                        return Token::Or;
+                        return Ok(Token::Or);
                     }
-                    // Single | is not supported, treat as identifier
-                    return Token::Identifier("|".to_string());
+                    return Ok(Token::Identifier("|".to_string()));
                 }
                 Some('(') => {
                     self.advance();
-                    return Token::LeftParen;
+                    return Ok(Token::LeftParen);
                 }
                 Some(')') => {
                     self.advance();
-                    return Token::RightParen;
+                    return Ok(Token::RightParen);
                 }
                 Some('{') => {
                     self.advance();
-                    return Token::LeftBrace;
+                    return Ok(Token::LeftBrace);
                 }
                 Some('}') => {
                     self.advance();
-                    return Token::RightBrace;
+                    return Ok(Token::RightBrace);
                 }
                 Some('[') => {
                     self.advance();
-                    return Token::LeftBracket;
+                    return Ok(Token::LeftBracket);
                 }
                 Some(']') => {
                     self.advance();
-                    return Token::RightBracket;
+                    return Ok(Token::RightBracket);
                 }
                 Some(',') => {
                     self.advance();
-                    return Token::Comma;
+                    return Ok(Token::Comma);
                 }
                 Some(';') => {
                     self.advance();
-                    return Token::Semicolon;
+                    return Ok(Token::Semicolon);
                 }
-                Some(_ch) => {
-                    // Skip unknown characters
+                Some(ch) => {
+                    let err = IqraError {
+                        kind: "رمز غير معروف | Unknown Character".to_string(),
+                        message_ar: format!("رمز غير معروف: '{}'", ch),
+                        message_en: format!("Unknown character: '{}'", ch),
+                        suggestion: Some("تأكد من صحة الكود | Check your code".to_string()),
+                        line: Some(self.line),
+                    };
                     self.advance();
-                    continue;
+                    return Err(anyhow!(err));
                 }
             }
         }
     }
-}
-
-fn is_arabic_digit(ch: char) -> bool {
-    matches!(ch, '٠'..='٩')
-}
-
-fn arabic_to_ascii_digit(ch: char) -> char {
-    match ch {
-        '٠' => '0',
-        '١' => '1',
-        '٢' => '2',
-        '٣' => '3',
-        '٤' => '4',
-        '٥' => '5',
-        '٦' => '6',
-        '٧' => '7',
-        '٨' => '8',
-        '٩' => '9',
-        _ => ch,
-    }
-}
-
-fn is_arabic_letter(ch: char) -> bool {
-    matches!(ch, '\u{0600}'..='\u{06FF}' | '\u{0750}'..='\u{077F}' | '\u{08A0}'..='\u{08FF}')
 }

@@ -1,16 +1,30 @@
 use crate::lang::lexer::{Lexer, Token};
 use crate::lang::value::Value;
+use crate::lang::runtime::IqraError;
 use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone)]
 pub enum Expr {
     Literal(Value),
     Identifier(String),
-    Binary { left: Box<Expr>, operator: BinaryOp, right: Box<Expr> },
-    Unary { operator: UnaryOp, operand: Box<Expr> },
-    Call { name: String, args: Vec<Expr> },
+    Binary {
+        left: Box<Expr>,
+        operator: BinaryOp,
+        right: Box<Expr>,
+    },
+    Unary {
+        operator: UnaryOp,
+        operand: Box<Expr>,
+    },
+    Call {
+        name: String,
+        args: Vec<Expr>,
+    },
     List(Vec<Expr>),
-    Index { object: Box<Expr>, index: Box<Expr> },
+    Index {
+        object: Box<Expr>,
+        index: Box<Expr>,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -27,13 +41,13 @@ pub enum BinaryOp {
     Greater,
     GreaterEqual,
     And,
-    Or,
+    Or
 }
 
 #[derive(Debug, Clone)]
 pub enum UnaryOp {
     Not,
-    Minus,
+    Minus
 }
 
 #[derive(Debug, Clone)]
@@ -43,52 +57,68 @@ pub enum Stmt {
     If { condition: Expr, then_branch: Vec<Stmt>, else_branch: Option<Vec<Stmt>> },
     While { condition: Expr, body: Vec<Stmt> },
     Block(Vec<Stmt>),
+    FunctionDef { name: String, params: Vec<String>, body: Vec<Stmt> },
+    Return(Expr),
+    TryCatch {
+        try_block: Vec<Stmt>,
+        catch_block: Vec<Stmt>,
+        error_var: Option<String>,
+    }
 }
 
+#[derive(Debug)]
 pub struct Parser {
     lexer: Lexer,
     current_token: Token,
 }
 
 impl Parser {
-    pub fn new(mut lexer: Lexer) -> Self {
-        let current_token = lexer.next_token();
-        Self { lexer, current_token }
-    }
-
-    fn advance(&mut self) {
-        self.current_token = self.lexer.next_token();
-    }
-
-    fn expect(&mut self, expected: Token) -> Result<()> {
-        if std::mem::discriminant(&self.current_token) == std::mem::discriminant(&expected) {
-            self.advance();
-            Ok(())
-        } else {
-            Err(anyhow!("Expected {:?}, found {:?}", expected, self.current_token))
+    /// Parses the input and returns a vector of statements.
+    pub fn parse(&mut self) -> Result<Vec<Stmt>> {
+        let mut statements = Vec::new();
+        self.skip_newlines();
+        while self.current_token != Token::Eof {
+            statements.push(self.statement()?);
+            self.skip_newlines();
         }
+        Ok(statements)
+    }
+    /// Creates a new Parser from a Lexer.
+    pub fn new(mut lexer: Lexer) -> Self {
+    let current_token = lexer.next_token().expect("Lexer error during parser initialization");
+    Parser { lexer, current_token }
+    }
+    /// Advances to the next token using the lexer.
+    fn advance(&mut self) {
+    self.current_token = self.lexer.next_token().expect("Lexer error during token advance");
     }
 
+    /// Skips newlines in the token stream.
     fn skip_newlines(&mut self) {
         while self.current_token == Token::Newline {
             self.advance();
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Stmt>> {
-        let mut statements = Vec::new();
-
-        self.skip_newlines();
-        while self.current_token != Token::Eof {
-            statements.push(self.statement()?);
-            self.skip_newlines();
+    /// Expects the current token to match the given token, otherwise returns an error.
+    fn expect(&mut self, expected: Token) -> Result<()> {
+        if self.current_token == expected {
+            self.advance();
+            Ok(())
+        } else {
+                Err(anyhow!(IqraError {
+                    kind: "خطأ في التحليل".to_string(),
+                    message_ar: format!("متوقع {:?}", expected),
+                    message_en: format!("Expected {:?}", expected),
+                    suggestion: Some("راجع بناء الجملة أو الأقواس".to_string()),
+                    line: None,
+                }))
         }
-
-        Ok(statements)
     }
-
     fn statement(&mut self) -> Result<Stmt> {
         match &self.current_token {
+            Token::Try => self.try_catch_statement(),
+            Token::Function => self.function_def(),
             Token::If => self.if_statement(),
             Token::While => self.while_statement(),
             Token::LeftBrace => self.block_statement(),
@@ -108,11 +138,152 @@ impl Parser {
                     Ok(Stmt::Expression(full_expr))
                 }
             }
+            Token::Return => {
+                self.advance();
+                let expr = self.expression()?;
+                Ok(Stmt::Return(expr))
+            }
             _ => {
                 let expr = self.expression()?;
                 Ok(Stmt::Expression(expr))
             }
         }
+    }
+
+    fn try_catch_statement(&mut self) -> Result<Stmt> {
+    println!("[DEBUG] Token after try/catch: {:?}", self.current_token);
+        // Advance past 'جرب' or 'try'
+        self.advance();
+        self.skip_newlines();
+        if self.current_token != Token::LeftBrace {
+          return Err(anyhow!(IqraError {
+             kind: "خطأ في بناء جرب".to_string(),
+             message_ar: "متوقع '{' بعد جرب/try".to_string(),
+             message_en: "Expected '{' after try".to_string(),
+             suggestion: Some("استخدم قوس الفتح بعد جرب/try".to_string()),
+             line: None,
+          }));
+        }
+        let try_block = self.block_statement_vec()?;
+        self.skip_newlines();
+        // Expect 'امسك' or 'catch'
+        match &self.current_token {
+            Token::Catch => {
+                self.advance();
+                self.skip_newlines();
+                let mut error_var = None;
+                if self.current_token == Token::LeftParen {
+                    self.advance();
+                    match &self.current_token {
+                        Token::Identifier(var) => {
+                            error_var = Some(var.clone());
+                            self.advance();
+                        },
+                        Token::False => {
+                            error_var = Some("خطأ".to_string());
+                            self.advance();
+                        },
+                        _ => {
+                            return Err(anyhow!(IqraError {
+                                kind: "خطأ في متغير الخطأ".to_string(),
+                                message_ar: "متوقع اسم متغير الخطأ بعد (".to_string(),
+                                message_en: "Expected error variable name after (".to_string(),
+                                suggestion: Some("اكتب اسم متغير بعد (".to_string()),
+                                line: None,
+                            }));
+                        }
+                    }
+                    if self.current_token == Token::RightParen {
+                        self.advance();
+                    } else {
+                        return Err(anyhow!(IqraError {
+                            kind: "خطأ في متغير الخطأ".to_string(),
+                            message_ar: "متوقع ')' بعد اسم متغير الخطأ".to_string(),
+                            message_en: "Expected ')' after error variable name".to_string(),
+                            suggestion: Some("استخدم قوس الإغلاق بعد اسم المتغير".to_string()),
+                            line: None,
+                        }));
+                    }
+                    self.skip_newlines();
+                }
+                let catch_block = self.block_statement_vec()?;
+                Ok(Stmt::TryCatch { try_block, catch_block, error_var })
+            }
+            _ => Err(anyhow!(IqraError {
+                kind: "خطأ في بناء جرب".to_string(),
+                message_ar: "متوقع 'امسك' أو 'catch' بعد 'جرب'".to_string(),
+                message_en: "Expected 'catch' after 'try'".to_string(),
+                suggestion: Some("استخدم امسك/catch بعد جرب/try".to_string()),
+                line: None,
+            })),
+        }
+    }
+
+    fn block_statement_vec(&mut self) -> Result<Vec<Stmt>> {
+        self.skip_newlines();
+        if self.current_token == Token::LeftBrace {
+            self.advance();
+            let mut statements = Vec::new();
+            self.skip_newlines();
+            while self.current_token != Token::RightBrace && self.current_token != Token::Eof {
+                statements.push(self.statement()?);
+                self.skip_newlines();
+            }
+            self.expect(Token::RightBrace)?;
+            Ok(statements)
+        } else {
+            Err(anyhow!(IqraError {
+                kind: "خطأ في بناء الكتلة".to_string(),
+                message_ar: "متوقع '{' لبدء كتلة".to_string(),
+                message_en: "Expected '{' to start block".to_string(),
+                suggestion: Some("استخدم قوس الفتح لبدء الكتلة".to_string()),
+                line: None,
+            }))
+        }
+    }
+
+    fn function_def(&mut self) -> Result<Stmt> {
+        self.expect(Token::Function)?;
+        let name = match &self.current_token {
+            Token::Identifier(n) => n.clone(),
+            _ => return Err(anyhow!(IqraError {
+                kind: "خطأ في اسم الدالة".to_string(),
+                message_ar: "متوقع اسم دالة بعد الكلمة المفتاحية".to_string(),
+                message_en: "Expected function name after keyword".to_string(),
+                suggestion: Some("اكتب اسم الدالة مباشرة بعد الكلمة المفتاحية".to_string()),
+                line: None,
+            })),
+        };
+        self.advance();
+        self.expect(Token::LeftParen)?;
+        let mut params = Vec::new();
+        if self.current_token != Token::RightParen {
+            loop {
+                match &self.current_token {
+                    Token::Identifier(p) => {
+                        params.push(p.clone());
+                        self.advance();
+                    }
+                    _ => return Err(anyhow!(IqraError {
+                        kind: "خطأ في اسم المعامل".to_string(),
+                        message_ar: "متوقع اسم معامل صحيح".to_string(),
+                        message_en: "Expected valid parameter name".to_string(),
+                        suggestion: Some("استخدم أسماء معاملات صحيحة".to_string()),
+                        line: None,
+                    })),
+                }
+                if self.current_token == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+        }
+        self.expect(Token::RightParen)?;
+        self.expect(Token::LeftBrace)?;
+        let body = self.block_body()?;
+        self.expect(Token::RightBrace)?;
+        Ok(Stmt::FunctionDef { name, params, body })
     }
 
     fn if_statement(&mut self) -> Result<Stmt> {
@@ -179,11 +350,16 @@ impl Parser {
                     self.expect(Token::RightParen)?;
                     Ok(Expr::Call { name, args })
                 } else {
-                    Err(anyhow!("Invalid function call"))
+                    Err(anyhow!(IqraError {
+                        kind: "خطأ في استدعاء الدالة".to_string(),
+                        message_ar: "استدعاء دالة غير صالح".to_string(),
+                        message_en: "Invalid function call".to_string(),
+                        suggestion: Some("استخدم اسم دالة صحيح قبل الأقواس".to_string()),
+                        line: None,
+                    }))
                 }
             }
             _ => {
-                // Parse binary operations with the existing left expression
                 self.parse_binary_with_left(left, 0)
             }
         }
@@ -361,7 +537,13 @@ impl Parser {
                 self.expect(Token::RightBracket)?;
                 Ok(Expr::List(elements))
             }
-            _ => Err(anyhow!("Unexpected token: {:?}", self.current_token)),
+            _ => Err(anyhow!(IqraError {
+                kind: "رمز غير متوقع".to_string(),
+                message_ar: format!("رمز غير متوقع: {:?}", self.current_token),
+                message_en: format!("Unexpected token: {:?}", self.current_token),
+                suggestion: Some("راجع بناء الجملة أو الرموز المستخدمة".to_string()),
+                line: None,
+            })),
         }
     }
 
@@ -440,3 +622,5 @@ impl Parser {
         Ok(expressions)
     }
 }
+
+

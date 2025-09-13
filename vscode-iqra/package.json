@@ -1,0 +1,56 @@
+{
+  "name": "iqra-language-support",
+  "displayName": "Iqra Language Support | دعم لغة اقرأ",
+  "description": "VSCode extension for syntax highlighting, smart completion, and error diagnostics for the Iqra programming language (Arabic/English).",
+  "version": "0.1.0",
+  "publisher": "amjadalbaaj",
+  "engines": {
+    "vscode": ">=1.80.0"
+  },
+  "categories": ["Programming Languages", "Linters", "Education"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "iqra",
+        "aliases": ["Iqra", "اقرأ"],
+        "extensions": [".iqra"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "iqra",
+        "scopeName": "source.iqra",
+        "path": "./syntaxes/iqra.tmLanguage.json"
+      }
+    ]
+  },
+  "activationEvents": [
+    "onLanguage:iqra",
+    "onCommand:iqra.runFile"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "iqra",
+        "aliases": ["Iqra", "اقرأ"],
+        "extensions": [".iqra"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "iqra",
+        "scopeName": "source.iqra",
+        "path": "./syntaxes/iqra.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "iqra.runFile",
+        "title": "Run Iqra File | نفذ ملف اقرأ"
+      }
+    ]
+  }
+}

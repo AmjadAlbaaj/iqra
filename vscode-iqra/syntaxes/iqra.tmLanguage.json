@@ -1,0 +1,30 @@
+{
+  "scopeName": "source.iqra",
+  "name": "Iqra",
+  "patterns": [
+    {
+      "name": "keyword.control.iqra",
+      "match": "\\b(اذا|إذا|وإلا|والا|وإلاّ|بينما|صحيح|خطأ|و|أو|ليس|دالة|ارجع|جرب|امسك|if|else|while|true|false|and|or|not|function|return|try|catch)\\b"
+    },
+    {
+      "name": "constant.numeric.iqra",
+      "match": "[0-9٠-٩]+(\\.[0-9٠-٩]+)?"
+    },
+    {
+      "name": "string.quoted.double.iqra",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.iqra",
+          "match": "\\\\[ntr\\\"]"
+        }
+      ]
+    },
+    {
+      "name": "comment.line.double-slash.iqra",
+      "begin": "//",
+      "end": "$"
+    }
+  ]
+}

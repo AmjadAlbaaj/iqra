@@ -1,3 +1,79 @@
+use crate::lang::runtime::IqraError;
+use anyhow::{Result, anyhow};
+impl Value {
+    pub fn to_number(&self) -> Result<f64> {
+        match self {
+            Value::Number(n) => Ok(*n),
+            Value::String(s) => s.parse::<f64>().map_err(|_| anyhow!(IqraError {
+                kind: "تحويل إلى رقم | To Number".to_string(),
+                message_ar: format!("لا يمكن تحويل السلسلة '{}' إلى رقم.", s),
+                message_en: format!("Cannot convert string '{}' to number.", s),
+                suggestion: Some("تأكد من أن السلسلة تمثل رقمًا صالحًا | Ensure the string is a valid number".to_string()),
+                line: None,
+            })),
+            _ => Err(anyhow!(IqraError {
+                kind: "تحويل إلى رقم | To Number".to_string(),
+                message_ar: format!("لا يمكن تحويل النوع '{}' إلى رقم.", self.type_name_ar()),
+                message_en: format!("Cannot convert type '{}' to number.", self.type_name()),
+                suggestion: Some("استخدم نوعًا مناسبًا | Use a suitable type".to_string()),
+                line: None,
+            })),
+        }
+    }
+
+    pub fn to_string(&self) -> Result<String> {
+        match self {
+            Value::String(s) => Ok(s.clone()),
+            Value::Number(n) => Ok(n.to_string()),
+            Value::Bool(b) => Ok(if *b { "صحيح".to_string() } else { "خطأ".to_string() }),
+            Value::Nil => Ok("فارغ".to_string()),
+            _ => Err(anyhow!(IqraError {
+                kind: "تحويل إلى سلسلة | To String".to_string(),
+                message_ar: format!("لا يمكن تحويل النوع '{}' إلى سلسلة.", self.type_name_ar()),
+                message_en: format!("Cannot convert type '{}' to string.", self.type_name()),
+                suggestion: Some("استخدم نوعًا مناسبًا | Use a suitable type".to_string()),
+                line: None,
+            })),
+        }
+    }
+
+    pub fn to_list(&self) -> Result<&Vec<Value>> {
+        match self {
+            Value::List(l) => Ok(l),
+            _ => Err(anyhow!(IqraError {
+                kind: "تحويل إلى قائمة | To List".to_string(),
+                message_ar: format!("لا يمكن تحويل النوع '{}' إلى قائمة.", self.type_name_ar()),
+                message_en: format!("Cannot convert type '{}' to list.", self.type_name()),
+                suggestion: Some("استخدم نوعًا مناسبًا | Use a suitable type".to_string()),
+                line: None,
+            })),
+        }
+    }
+
+    pub fn to_map(&self) -> Result<&HashMap<String, Value>> {
+        match self {
+            Value::Map(m) => Ok(m),
+            _ => Err(anyhow!(IqraError {
+                kind: "تحويل إلى قاموس | To Map".to_string(),
+                message_ar: format!("لا يمكن تحويل النوع '{}' إلى قاموس.", self.type_name_ar()),
+                message_en: format!("Cannot convert type '{}' to map.", self.type_name()),
+                suggestion: Some("استخدم نوعًا مناسبًا | Use a suitable type".to_string()),
+                line: None,
+            })),
+        }
+    }
+
+    pub fn type_name_ar(&self) -> &'static str {
+        match self {
+            Value::Nil => "فارغ",
+            Value::Bool(_) => "منطقي",
+            Value::Number(_) => "رقم",
+            Value::String(_) => "سلسلة",
+            Value::List(_) => "قائمة",
+            Value::Map(_) => "قاموس",
+        }
+    }
+}
 use std::collections::HashMap;
 use std::fmt;
 
@@ -70,7 +146,7 @@ impl Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Nil => write!(f, "nil"),
+            Value::Nil => write!(f, "فارغ"),
             Value::Bool(b) => write!(f, "{}", if *b { "صحيح" } else { "خطأ" }),
             Value::Number(n) => {
                 if n.fract() == 0.0 {

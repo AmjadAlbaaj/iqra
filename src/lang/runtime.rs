@@ -1,3 +1,24 @@
+#[derive(Debug, Clone)]
+pub struct IqraError {
+    pub kind: String,
+    pub message_ar: String,
+    pub message_en: String,
+    pub suggestion: Option<String>,
+    pub line: Option<usize>,
+}
+
+impl std::fmt::Display for IqraError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {} | {}", self.kind, self.message_ar, self.message_en)?;
+        if let Some(suggestion) = &self.suggestion {
+            write!(f, "\nاقتراح: {} | Suggestion: {}", suggestion, suggestion)?;
+        }
+        if let Some(line) = self.line {
+            write!(f, "\nالسطر: {} | Line: {}", line, line)?;
+        }
+        Ok(())
+    }
+}
 use crate::lang::lexer::Lexer;
 use crate::lang::parser::{BinaryOp, Expr, Parser, Stmt, UnaryOp};
 use crate::lang::value::Value;
@@ -152,8 +173,11 @@ impl SystemExecutor for DefaultSystemExecutor {
 }
 
 pub struct Runtime {
-    variables: HashMap<String, Value>,
+    variable_stack: Vec<HashMap<String, Value>>,
+    functions: HashMap<String, (Vec<String>, Vec<Stmt>)>,
     system_executor: Box<dyn SystemExecutor>,
+    today_cache: Option<String>,
+    system_info_cache: Option<HashMap<String, String>>,
 }
 
 impl Default for Runtime {
@@ -163,12 +187,91 @@ impl Default for Runtime {
 }
 
 impl Runtime {
+    /// Returns a reference to the current variables (for REPL step mode)
+    pub fn get_variables(&self) -> &HashMap<String, Value> {
+        self.variable_stack.last().unwrap()
+    }
+    fn call_user_function(&mut self, name: &str, args: &[Value]) -> Result<Value> {
+        // Lazy evaluation: defer block execution, avoid unnecessary evaluation
+        let (params, body) = self.functions.get(name).ok_or_else(|| anyhow!(IqraError {
+            kind: "دالة غير معرفة".to_string(),
+            message_ar: format!("الدالة غير معرفة: {}", name),
+            message_en: format!("Undefined function: {}", name),
+            suggestion: Some("تأكد من كتابة اسم الدالة بشكل صحيح".to_string()),
+            line: None,
+        }))?.clone();
+        if args.len() != params.len() {
+            return Err(anyhow!(IqraError {
+                kind: "عدد وسائط غير صحيح".to_string(),
+                message_ar: "عدد الوسائط لا يطابق عدد المعاملات".to_string(),
+                message_en: "Argument count mismatch".to_string(),
+                suggestion: Some("تأكد من عدد الوسائط المدخلة".to_string()),
+                line: None,
+            }));
+        }
+        // Save current variables (future: use stack frames for true lazy scope)
+        let old_vars = self.variable_stack.last().unwrap().clone();
+        for (p, v) in params.iter().zip(args.iter()) {
+            self.variable_stack.last_mut().unwrap().insert(p.clone(), v.clone());
+        }
+        // Execute body lazily: only evaluate statements as needed
+        let mut ret = Value::Nil;
+        for stmt in &body {
+            match self.execute_statement(stmt) {
+                Ok(v) => ret = v,
+                Err(e) => {
+                    let msg = format!("{}", e);
+                    if msg.starts_with("__RETURN__:") {
+                        let val_str = msg.trim_start_matches("__RETURN__:");
+                        if val_str.contains("String(") {
+                            let s = val_str.split("String(").nth(1).unwrap().split(")").next().unwrap();
+                            ret = Value::String(s.to_string());
+                        } else if val_str.contains("Number(") {
+                            let n = val_str.split("Number(").nth(1).unwrap().split(")").next().unwrap();
+                            ret = Value::Number(n.parse().unwrap_or(0.0));
+                        } else {
+                            ret = Value::Nil;
+                        }
+                        break;
+                    } else {
+                        *self.variable_stack.last_mut().unwrap() = old_vars.clone();
+                        // Wrap error in IqraError if not already
+                        if msg.contains("IqraError") {
+                            return Err(anyhow!(msg));
+                        } else {
+                            return Err(anyhow!(IqraError {
+                                kind: "خطأ في تنفيذ الدالة".to_string(),
+                                message_ar: format!("خطأ أثناء تنفيذ الدالة: {}", msg),
+                                message_en: format!("Error during function execution: {}", msg),
+                                suggestion: Some("راجع الكود داخل الدالة".to_string()),
+                                line: None,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    *self.variable_stack.last_mut().unwrap() = old_vars;
+        Ok(ret)
+    }
     pub fn new() -> Self {
-        Self { variables: HashMap::new(), system_executor: Box::new(DefaultSystemExecutor) }
+            Runtime {
+                variable_stack: vec![HashMap::new()],
+                functions: HashMap::new(),
+                system_executor: Box::new(DefaultSystemExecutor),
+                today_cache: None,
+                system_info_cache: None,
+            }
     }
 
     pub fn new_with_executor(executor: Box<dyn SystemExecutor>) -> Self {
-        Self { variables: HashMap::new(), system_executor: executor }
+            Runtime {
+                variable_stack: vec![HashMap::new()],
+                functions: HashMap::new(),
+                system_executor: executor,
+                today_cache: None,
+                system_info_cache: None,
+            }
     }
 
     pub fn execute(&mut self, input: &str) -> Result<Value> {
@@ -185,13 +288,13 @@ impl Runtime {
     }
 
     fn execute_statement(&mut self, stmt: &Stmt) -> Result<Value> {
-        match stmt {
-            Stmt::Expression(expr) => self.evaluate_expression(expr),
-            Stmt::Assignment { name, value } => {
-                let val = self.evaluate_expression(value)?;
-                self.variables.insert(name.clone(), val.clone());
-                Ok(val)
-            }
+            match stmt {
+                Stmt::Expression(expr) => self.evaluate_expression(expr),
+                Stmt::Assignment { name, value } => {
+                    let val = self.evaluate_expression(value)?;
+                    self.variable_stack.last_mut().unwrap().insert(name.clone(), val.clone());
+                    Ok(val)
+                }
             Stmt::If { condition, then_branch, else_branch } => {
                 let condition_value = self.evaluate_expression(condition)?;
                 if condition_value.is_truthy() {
@@ -210,13 +313,48 @@ impl Runtime {
                 Ok(last_value)
             }
             Stmt::Block(statements) => self.execute_block(statements),
+            Stmt::FunctionDef { name, params, body } => {
+                self.functions.insert(name.clone(), (params.clone(), body.clone()));
+                Ok(Value::Nil)
+            }
+            Stmt::Return(expr) => {
+                // Special handling: propagate return value up
+                let val = self.evaluate_expression(expr)?;
+                Err(anyhow!("__RETURN__:{:?}", val))
+            }
+            Stmt::TryCatch { try_block, catch_block, error_var } => {
+                // Execute try block
+                match self.execute_block(try_block) {
+                    Ok(val) => Ok(val),
+                    Err(e) => {
+                        // Optionally bind error to variable
+                        if let Some(var) = error_var {
+                            self.variable_stack.last_mut().unwrap().insert(var.clone(), Value::String(format!("{}", e)));
+                        }
+                        // Execute catch block
+                        self.execute_block(catch_block)
+                    }
+                }
+            },
         }
     }
 
     fn execute_block(&mut self, statements: &[Stmt]) -> Result<Value> {
+        // Lazy evaluation: only evaluate statements as needed (e.g., for early return)
         let mut last_value = Value::Nil;
         for stmt in statements {
-            last_value = self.execute_statement(stmt)?;
+            match self.execute_statement(stmt) {
+                Ok(v) => last_value = v,
+                Err(e) => {
+                    let msg = format!("{}", e);
+                    if msg.starts_with("__RETURN__:") {
+                        last_value = Value::Nil; // Value will be handled by caller
+                        break;
+                    } else {
+                        return Err(anyhow!(msg));
+                    }
+                }
+            }
         }
         Ok(last_value)
     }
@@ -225,10 +363,16 @@ impl Runtime {
         match expr {
             Expr::Literal(value) => Ok(value.clone()),
             Expr::Identifier(name) => self
-                .variables
+                .variable_stack.last().unwrap()
                 .get(name)
                 .cloned()
-                .ok_or_else(|| anyhow!("Undefined variable: {}", name)),
+                .ok_or_else(|| anyhow!(IqraError {
+                    kind: "متغير غير معرف".to_string(),
+                    message_ar: format!("المتغير غير معرف: {}", name),
+                    message_en: format!("Undefined variable: {}", name),
+                    suggestion: Some("تأكد من تعريف المتغير قبل استخدامه".to_string()),
+                    line: None,
+                })),
             Expr::Binary { left, operator, right } => {
                 let left_val = self.evaluate_expression(left)?;
                 let right_val = self.evaluate_expression(right)?;
@@ -242,7 +386,11 @@ impl Runtime {
                 let arg_values: Result<Vec<Value>> =
                     args.iter().map(|arg| self.evaluate_expression(arg)).collect();
                 let arg_values = arg_values?;
-                self.call_builtin(name, &arg_values)
+                if self.functions.contains_key(name) {
+                    return self.call_user_function(name, &arg_values);
+                } else {
+                    return self.call_builtin(name, &arg_values);
+                }
             }
             Expr::List(elements) => {
                 let values: Result<Vec<Value>> =
@@ -262,53 +410,119 @@ impl Runtime {
             BinaryOp::Add => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
                 (Value::String(a), Value::String(b)) => Ok(Value::String(format!("{}{}", a, b))),
-                _ => Err(anyhow!("Invalid operands for addition")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "جمع غير صالح".to_string(),
+                    message_ar: "معاملات غير صالحة للجمع".to_string(),
+                    message_en: "Invalid operands for addition".to_string(),
+                    suggestion: Some("تأكد أن الطرفين أرقام أو نصوص".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::Subtract => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
-                _ => Err(anyhow!("Invalid operands for subtraction")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "طرح غير صالح".to_string(),
+                    message_ar: "معاملات غير صالحة للطرح".to_string(),
+                    message_en: "Invalid operands for subtraction".to_string(),
+                    suggestion: Some("استخدم أرقام فقط".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::Multiply => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
-                _ => Err(anyhow!("Invalid operands for multiplication")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "ضرب غير صالح".to_string(),
+                    message_ar: "معاملات غير صالحة للضرب".to_string(),
+                    message_en: "Invalid operands for multiplication".to_string(),
+                    suggestion: Some("استخدم أرقام فقط".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::Divide => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => {
                     if *b == 0.0 {
-                        Err(anyhow!("Division by zero"))
+                        Err(anyhow!(IqraError {
+                            kind: "قسمة على صفر".to_string(),
+                            message_ar: "القسمة على صفر".to_string(),
+                            message_en: "Division by zero".to_string(),
+                            suggestion: Some("تأكد أن المقسوم عليه ليس صفراً".to_string()),
+                            line: None,
+                        }))
                     } else {
                         Ok(Value::Number(a / b))
                     }
                 }
-                _ => Err(anyhow!("Invalid operands for division")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "قسمة غير صالحة".to_string(),
+                    message_ar: "معاملات غير صالحة للقسمة".to_string(),
+                    message_en: "Invalid operands for division".to_string(),
+                    suggestion: Some("استخدم أرقام فقط".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::Modulo => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => {
                     if *b == 0.0 {
-                        Err(anyhow!("Modulo by zero"))
+                        Err(anyhow!(IqraError {
+                            kind: "قسمة باقية على صفر".to_string(),
+                            message_ar: "القسمة الباقية على صفر".to_string(),
+                            message_en: "Modulo by zero".to_string(),
+                            suggestion: Some("تأكد أن المقسوم عليه ليس صفراً".to_string()),
+                            line: None,
+                        }))
                     } else {
                         Ok(Value::Number(a % b))
                     }
                 }
-                _ => Err(anyhow!("Invalid operands for modulo")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "قسمة باقية غير صالحة".to_string(),
+                    message_ar: "معاملات غير صالحة للقسمة الباقية".to_string(),
+                    message_en: "Invalid operands for modulo".to_string(),
+                    suggestion: Some("استخدم أرقام فقط".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::Equal => Ok(Value::Bool(left == right)),
             BinaryOp::NotEqual => Ok(Value::Bool(left != right)),
             BinaryOp::Less => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a < b)),
-                _ => Err(anyhow!("Invalid operands for comparison")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "مقارنة غير صالحة".to_string(),
+                    message_ar: "معاملات غير صالحة للمقارنة".to_string(),
+                    message_en: "Invalid operands for comparison".to_string(),
+                    suggestion: Some("استخدم أرقام فقط".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::LessEqual => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a <= b)),
-                _ => Err(anyhow!("Invalid operands for comparison")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "مقارنة غير صالحة".to_string(),
+                    message_ar: "معاملات غير صالحة للمقارنة".to_string(),
+                    message_en: "Invalid operands for comparison".to_string(),
+                    suggestion: Some("استخدم أرقام فقط".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::Greater => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a > b)),
-                _ => Err(anyhow!("Invalid operands for comparison")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "مقارنة غير صالحة".to_string(),
+                    message_ar: "معاملات غير صالحة للمقارنة".to_string(),
+                    message_en: "Invalid operands for comparison".to_string(),
+                    suggestion: Some("استخدم أرقام فقط".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::GreaterEqual => match (left, right) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a >= b)),
-                _ => Err(anyhow!("Invalid operands for comparison")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "مقارنة غير صالحة".to_string(),
+                    message_ar: "معاملات غير صالحة للمقارنة".to_string(),
+                    message_en: "Invalid operands for comparison".to_string(),
+                    suggestion: Some("استخدم أرقام فقط".to_string()),
+                    line: None,
+                })),
             },
             BinaryOp::And => Ok(Value::Bool(left.is_truthy() && right.is_truthy())),
             BinaryOp::Or => Ok(Value::Bool(left.is_truthy() || right.is_truthy())),
@@ -320,7 +534,13 @@ impl Runtime {
             UnaryOp::Not => Ok(Value::Bool(!operand.is_truthy())),
             UnaryOp::Minus => match operand {
                 Value::Number(n) => Ok(Value::Number(-n)),
-                _ => Err(anyhow!("Invalid operand for unary minus")),
+                _ => Err(anyhow!(IqraError {
+                    kind: "سالب أحادي غير صالح".to_string(),
+                    message_ar: "معامل غير صالح للسالب الأحادي".to_string(),
+                    message_en: "Invalid operand for unary minus".to_string(),
+                    suggestion: Some("استخدم رقم فقط".to_string()),
+                    line: None,
+                })),
             },
         }
     }
@@ -329,12 +549,30 @@ impl Runtime {
         match (object, index) {
             (Value::List(list), Value::Number(n)) => {
                 let idx = *n as usize;
-                list.get(idx).cloned().ok_or_else(|| anyhow!("Index out of bounds: {}", idx))
+                list.get(idx).cloned().ok_or_else(|| anyhow!(IqraError {
+                    kind: "فهرسة خارج النطاق".to_string(),
+                    message_ar: format!("الفهرس خارج النطاق: {}", idx),
+                    message_en: format!("Index out of bounds: {}", idx),
+                    suggestion: Some("تأكد من أن الفهرس ضمن حدود القائمة".to_string()),
+                    line: None,
+                }))
             }
             (Value::Map(map), Value::String(key)) => {
-                map.get(key).cloned().ok_or_else(|| anyhow!("Key not found: {}", key))
+                map.get(key).cloned().ok_or_else(|| anyhow!(IqraError {
+                    kind: "مفتاح غير موجود".to_string(),
+                    message_ar: format!("المفتاح غير موجود: {}", key),
+                    message_en: format!("Key not found: {}", key),
+                    suggestion: Some("تأكد من وجود المفتاح في القاموس".to_string()),
+                    line: None,
+                }))
             }
-            _ => Err(anyhow!("Invalid indexing operation")),
+            _ => Err(anyhow!(IqraError {
+                kind: "عملية فهرسة غير صالحة".to_string(),
+                message_ar: "عملية فهرسة غير صالحة".to_string(),
+                message_en: "Invalid indexing operation".to_string(),
+                suggestion: Some("استخدم قائمة أو قاموس مع فهرس مناسب".to_string()),
+                line: None,
+            })),
         }
     }
 
@@ -361,24 +599,48 @@ impl Runtime {
 
             "list_len" | "طول_القائمة" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("list_len expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة طول_القائمة تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "list_len expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قائمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::List(list) => Ok(Value::Number(list.len() as f64)),
-                    _ => Err(anyhow!("list_len expects a list")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "دالة طول_القائمة تتوقع قائمة".to_string(),
+                        message_en: "list_len expects a list".to_string(),
+                        suggestion: Some("تأكد أن الوسيط هو قائمة".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "get" | "عنصر" => {
                 if args.len() != 2 {
-                    return Err(anyhow!("get expects 2 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة عنصر تتوقع وسيطين".to_string(),
+                        message_en: "get expects 2 arguments".to_string(),
+                        suggestion: Some("استخدم قائمة وفهرس".to_string()),
+                        line: None,
+                    }));
                 }
                 self.evaluate_index(&args[0], &args[1])
             }
 
             "append" | "أضف" => {
                 if args.len() != 2 {
-                    return Err(anyhow!("append expects 2 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة أضف تتوقع وسيطين".to_string(),
+                        message_en: "append expects 2 arguments".to_string(),
+                        suggestion: Some("استخدم قائمة وقيمة للإضافة".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::List(list) => {
@@ -386,13 +648,25 @@ impl Runtime {
                         new_list.push(args[1].clone());
                         Ok(Value::List(new_list))
                     }
-                    _ => Err(anyhow!("append expects a list as first argument")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "دالة أضف تتوقع قائمة كوسيط أول".to_string(),
+                        message_en: "append expects a list as first argument".to_string(),
+                        suggestion: Some("تأكد أن الوسيط الأول هو قائمة".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "remove" | "احذف" => {
                 if args.len() != 2 {
-                    return Err(anyhow!("remove expects 2 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة احذف تتوقع وسيطين".to_string(),
+                        message_en: "remove expects 2 arguments".to_string(),
+                        suggestion: Some("استخدم قائمة وقيمة للحذف".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::List(list) => {
@@ -404,31 +678,61 @@ impl Runtime {
                         }
                         Ok(Value::List(new_list))
                     }
-                    _ => Err(anyhow!("remove expects a list as first argument")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "دالة احذف تتوقع قائمة كوسيط أول".to_string(),
+                        message_en: "remove expects a list as first argument".to_string(),
+                        suggestion: Some("تأكد أن الوسيط الأول هو قائمة".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "contains" | "يحتوي" => {
                 if args.len() != 2 {
-                    return Err(anyhow!("contains expects 2 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة يحتوي تتوقع وسيطين".to_string(),
+                        message_en: "contains expects 2 arguments".to_string(),
+                        suggestion: Some("استخدم قائمة وقيمة للبحث".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::List(list) => Ok(Value::Bool(list.contains(&args[1]))),
-                    _ => Err(anyhow!("contains expects a list as first argument")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "دالة يحتوي تتوقع قائمة كوسيط أول".to_string(),
+                        message_en: "contains expects a list as first argument".to_string(),
+                        suggestion: Some("تأكد أن الوسيط الأول هو قائمة".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             // Map functions
             "map" | "قاموس" => {
                 if args.len() % 2 != 0 {
-                    return Err(anyhow!("map expects an even number of arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة قاموس تتوقع عدد زوجي من الوسائط".to_string(),
+                        message_en: "map expects an even number of arguments".to_string(),
+                        suggestion: Some("استخدم أزواج مفتاح/قيمة".to_string()),
+                        line: None,
+                    }));
                 }
                 let mut map = HashMap::new();
                 for chunk in args.chunks(2) {
                     if let Value::String(key) = &chunk[0] {
                         map.insert(key.clone(), chunk[1].clone());
                     } else {
-                        return Err(anyhow!("map keys must be strings"));
+                        return Err(anyhow!(IqraError {
+                            kind: "نوع مفتاح غير صحيح".to_string(),
+                            message_ar: "مفاتيح القاموس يجب أن تكون نصوصاً".to_string(),
+                            message_en: "map keys must be strings".to_string(),
+                            suggestion: Some("تأكد أن جميع المفاتيح نصوص".to_string()),
+                            line: None,
+                        }));
                     }
                 }
                 Ok(Value::Map(map))
@@ -436,14 +740,26 @@ impl Runtime {
 
             "map_get" | "جلب_عنصر" => {
                 if args.len() != 2 {
-                    return Err(anyhow!("map_get expects 2 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة جلب_عنصر تتوقع وسيطين".to_string(),
+                        message_en: "map_get expects 2 arguments".to_string(),
+                        suggestion: Some("استخدم قاموس ومفتاح".to_string()),
+                        line: None,
+                    }));
                 }
                 self.evaluate_index(&args[0], &args[1])
             }
 
             "map_set" | "تعيين_عنصر" => {
                 if args.len() != 3 {
-                    return Err(anyhow!("map_set expects 3 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة تعيين_عنصر تتوقع 3 وسائط".to_string(),
+                        message_en: "map_set expects 3 arguments".to_string(),
+                        suggestion: Some("استخدم قاموس، مفتاح، وقيمة".to_string()),
+                        line: None,
+                    }));
                 }
                 match (&args[0], &args[1]) {
                     (Value::Map(map), Value::String(key)) => {
@@ -451,13 +767,25 @@ impl Runtime {
                         new_map.insert(key.clone(), args[2].clone());
                         Ok(Value::Map(new_map))
                     }
-                    _ => Err(anyhow!("map_set expects a map and string key")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "map_set تتوقع قاموس ومفتاح نصي".to_string(),
+                        message_en: "map_set expects a map and string key".to_string(),
+                        suggestion: Some("تأكد أن الوسيط الأول قاموس والثاني نص".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "map_remove" | "حذف_عنصر" => {
                 if args.len() != 2 {
-                    return Err(anyhow!("map_remove expects 2 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "دالة حذف_عنصر تتوقع وسيطين".to_string(),
+                        message_en: "map_remove expects 2 arguments".to_string(),
+                        suggestion: Some("استخدم قاموس ومفتاح".to_string()),
+                        line: None,
+                    }));
                 }
                 match (&args[0], &args[1]) {
                     (Value::Map(map), Value::String(key)) => {
@@ -465,26 +793,43 @@ impl Runtime {
                         new_map.remove(key);
                         Ok(Value::Map(new_map))
                     }
-                    _ => Err(anyhow!("map_remove expects a map and string key")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "map_remove تتوقع قاموس ومفتاح نصي".to_string(),
+                        message_en: "map_remove expects a map and string key".to_string(),
+                        suggestion: Some("تأكد أن الوسيط الأول قاموس والثاني نص".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             // Type and conversion functions
             "type" | "نوع" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("type expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "type تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "type expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قيمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 Ok(Value::String(args[0].type_name().to_string()))
             }
 
             "to_number" | "إلى_رقم" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("to_number expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "إلى_رقم تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "to_number expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قيمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::Number(n) => Ok(Value::Number(*n)),
                     Value::String(s) => {
-                        // Convert Arabic digits to ASCII digits first
                         let ascii_str = s
                             .chars()
                             .map(|ch| match ch {
@@ -505,48 +850,96 @@ impl Runtime {
                         ascii_str
                             .parse::<f64>()
                             .map(Value::Number)
-                            .map_err(|_| anyhow!("Cannot convert '{}' to number", s))
+                            .map_err(|_| anyhow!(IqraError {
+                                kind: "تحويل غير صالح".to_string(),
+                                message_ar: format!("لا يمكن تحويل '{}' إلى رقم", s),
+                                message_en: format!("Cannot convert '{}' to number", s),
+                                suggestion: Some("تأكد أن النص يمثل رقماً صحيحاً".to_string()),
+                                line: None,
+                            }))
                     }
-                    _ => Err(anyhow!("Cannot convert to number")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "لا يمكن تحويل القيمة إلى رقم".to_string(),
+                        message_en: "Cannot convert to number".to_string(),
+                        suggestion: Some("استخدم نصاً أو رقماً فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "to_string" | "إلى_نص" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("to_string expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "إلى_نص تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "to_string expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قيمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 Ok(Value::String(format!("{}", args[0])))
             }
 
             "is_number" | "رقم؟" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("is_number expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "رقم؟ تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "is_number expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قيمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 Ok(Value::Bool(matches!(args[0], Value::Number(_))))
             }
 
             "is_string" | "نص؟" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("is_string expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "نص؟ تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "is_string expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قيمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 Ok(Value::Bool(matches!(args[0], Value::String(_))))
             }
 
             "len" | "طول" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("len expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "طول تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "len expects 1 argument".to_string(),
+                        suggestion: Some("استخدم نصاً أو قائمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::String(s) => Ok(Value::Number(s.chars().count() as f64)),
                     Value::List(l) => Ok(Value::Number(l.len() as f64)),
-                    _ => Err(anyhow!("len expects a string or list")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "طول يتوقع نصاً أو قائمة".to_string(),
+                        message_en: "len expects a string or list".to_string(),
+                        suggestion: Some("استخدم نصاً أو قائمة فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             // Math functions
             "sum" | "جمع" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("sum expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "جمع تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "sum expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قائمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::List(list) => {
@@ -555,18 +948,36 @@ impl Runtime {
                             if let Value::Number(n) = item {
                                 total += n;
                             } else {
-                                return Err(anyhow!("sum expects a list of numbers"));
+                                return Err(anyhow!(IqraError {
+                                    kind: "نوع عنصر غير صحيح".to_string(),
+                                    message_ar: "جمع يتوقع قائمة أرقام فقط".to_string(),
+                                    message_en: "sum expects a list of numbers".to_string(),
+                                    suggestion: Some("تأكد أن جميع العناصر أرقام".to_string()),
+                                    line: None,
+                                }));
                             }
                         }
                         Ok(Value::Number(total))
                     }
-                    _ => Err(anyhow!("sum expects a list")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "جمع يتوقع قائمة".to_string(),
+                        message_en: "sum expects a list".to_string(),
+                        suggestion: Some("استخدم قائمة فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "average" | "متوسط" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("average expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "متوسط يتوقع وسيطاً واحداً".to_string(),
+                        message_en: "average expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قائمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::List(list) => {
@@ -578,23 +989,47 @@ impl Runtime {
                             if let Value::Number(n) = item {
                                 total += n;
                             } else {
-                                return Err(anyhow!("average expects a list of numbers"));
+                                return Err(anyhow!(IqraError {
+                                    kind: "نوع عنصر غير صحيح".to_string(),
+                                    message_ar: "متوسط يتوقع قائمة أرقام فقط".to_string(),
+                                    message_en: "average expects a list of numbers".to_string(),
+                                    suggestion: Some("تأكد أن جميع العناصر أرقام".to_string()),
+                                    line: None,
+                                }));
                             }
                         }
                         Ok(Value::Number(total / list.len() as f64))
                     }
-                    _ => Err(anyhow!("average expects a list")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "متوسط يتوقع قائمة".to_string(),
+                        message_en: "average expects a list".to_string(),
+                        suggestion: Some("استخدم قائمة فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "max" | "أكبر" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("max expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "أكبر تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "max expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قائمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::List(list) => {
                         if list.is_empty() {
-                            return Err(anyhow!("max expects a non-empty list"));
+                            return Err(anyhow!(IqraError {
+                                kind: "قائمة فارغة".to_string(),
+                                message_ar: "أكبر تتوقع قائمة غير فارغة".to_string(),
+                                message_en: "max expects a non-empty list".to_string(),
+                                suggestion: Some("استخدم قائمة فيها عناصر".to_string()),
+                                line: None,
+                            }));
                         }
                         let mut max_val = f64::NEG_INFINITY;
                         for item in list {
@@ -603,23 +1038,47 @@ impl Runtime {
                                     max_val = *n;
                                 }
                             } else {
-                                return Err(anyhow!("max expects a list of numbers"));
+                                return Err(anyhow!(IqraError {
+                                    kind: "نوع عنصر غير صحيح".to_string(),
+                                    message_ar: "أكبر يتوقع قائمة أرقام فقط".to_string(),
+                                    message_en: "max expects a list of numbers".to_string(),
+                                    suggestion: Some("تأكد أن جميع العناصر أرقام".to_string()),
+                                    line: None,
+                                }));
                             }
                         }
                         Ok(Value::Number(max_val))
                     }
-                    _ => Err(anyhow!("max expects a list")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "أكبر يتوقع قائمة".to_string(),
+                        message_en: "max expects a list".to_string(),
+                        suggestion: Some("استخدم قائمة فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "min" | "أصغر" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("min expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "أصغر تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "min expects 1 argument".to_string(),
+                        suggestion: Some("استخدم قائمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::List(list) => {
                         if list.is_empty() {
-                            return Err(anyhow!("min expects a non-empty list"));
+                            return Err(anyhow!(IqraError {
+                                kind: "قائمة فارغة".to_string(),
+                                message_ar: "أصغر تتوقع قائمة غير فارغة".to_string(),
+                                message_en: "min expects a non-empty list".to_string(),
+                                suggestion: Some("استخدم قائمة فيها عناصر".to_string()),
+                                line: None,
+                            }));
                         }
                         let mut min_val = f64::INFINITY;
                         for item in list {
@@ -628,32 +1087,62 @@ impl Runtime {
                                     min_val = *n;
                                 }
                             } else {
-                                return Err(anyhow!("min expects a list of numbers"));
+                                return Err(anyhow!(IqraError {
+                                    kind: "نوع عنصر غير صحيح".to_string(),
+                                    message_ar: "أصغر يتوقع قائمة أرقام فقط".to_string(),
+                                    message_en: "min expects a list of numbers".to_string(),
+                                    suggestion: Some("تأكد أن جميع العناصر أرقام".to_string()),
+                                    line: None,
+                                }));
                             }
                         }
                         Ok(Value::Number(min_val))
                     }
-                    _ => Err(anyhow!("min expects a list")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "أصغر يتوقع قائمة".to_string(),
+                        message_en: "min expects a list".to_string(),
+                        suggestion: Some("استخدم قائمة فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             // String functions
             "word_count" | "عدد_الكلمات" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("word_count expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "عدد_الكلمات تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "word_count expects 1 argument".to_string(),
+                        suggestion: Some("استخدم نصاً واحداً فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::String(s) => {
                         let count = s.split_whitespace().count();
                         Ok(Value::Number(count as f64))
                     }
-                    _ => Err(anyhow!("word_count expects a string")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "عدد_الكلمات تتوقع نصاً".to_string(),
+                        message_en: "word_count expects a string".to_string(),
+                        suggestion: Some("استخدم نصاً فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "reverse" | "عكس" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("reverse expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "عكس تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "reverse expects 1 argument".to_string(),
+                        suggestion: Some("استخدم نصاً أو قائمة واحدة فقط".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::String(s) => {
@@ -665,77 +1154,166 @@ impl Runtime {
                         reversed.reverse();
                         Ok(Value::List(reversed))
                     }
-                    _ => Err(anyhow!("reverse expects a string or list")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "عكس يتوقع نصاً أو قائمة".to_string(),
+                        message_en: "reverse expects a string or list".to_string(),
+                        suggestion: Some("استخدم نصاً أو قائمة فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             // Date functions
             "today" | "تاريخ_اليوم" => {
-                use chrono::Local;
-                let today = Local::now().format("%Y-%m-%d").to_string();
-                Ok(Value::String(today))
+                if let Some(ref cached) = self.today_cache {
+                    Ok(Value::String(cached.clone()))
+                } else {
+                    use chrono::Local;
+                    let today = Local::now().format("%Y-%m-%d").to_string();
+                    self.today_cache = Some(today.clone());
+                    Ok(Value::String(today))
+                }
             }
 
             // System functions
             "system" | "نفذ_أمر" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("system expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "نفذ_أمر تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "system expects 1 argument".to_string(),
+                        suggestion: Some("استخدم نصاً يمثل الأمر".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::String(cmd) => match self.system_executor.exec(cmd) {
                         Ok(output) => Ok(Value::String(output.trim().to_string())),
-                        Err(e) => Err(anyhow!("System command failed: {}", e)),
+                        Err(e) => Err(anyhow!(IqraError {
+                            kind: "فشل تنفيذ أمر النظام".to_string(),
+                            message_ar: format!("فشل تنفيذ الأمر: {}", e),
+                            message_en: format!("System command failed: {}", e),
+                            suggestion: Some("تأكد من صحة الأمر وصلاحيات التنفيذ".to_string()),
+                            line: None,
+                        })),
                     },
-                    _ => Err(anyhow!("system expects a string command")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "نفذ_أمر يتوقع نصاً يمثل الأمر".to_string(),
+                        message_en: "system expects a string command".to_string(),
+                        suggestion: Some("استخدم نصاً فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "system_with_io" | "نفذ_أمر_بمدخل" => {
                 if args.len() != 2 {
-                    return Err(anyhow!("system_with_io expects 2 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "نفذ_أمر_بمدخل تتوقع وسيطين".to_string(),
+                        message_en: "system_with_io expects 2 arguments".to_string(),
+                        suggestion: Some("استخدم نصين: الأمر والمدخل".to_string()),
+                        line: None,
+                    }));
                 }
                 match (&args[0], &args[1]) {
                     (Value::String(cmd), Value::String(input)) => {
                         match self.system_executor.exec_with_io(cmd, input) {
                             Ok(output) => Ok(Value::String(output.trim().to_string())),
-                            Err(e) => Err(anyhow!("System command failed: {}", e)),
+                            Err(e) => Err(anyhow!(IqraError {
+                                kind: "فشل تنفيذ أمر النظام".to_string(),
+                                message_ar: format!("فشل تنفيذ الأمر بمدخل: {}", e),
+                                message_en: format!("System command failed: {}", e),
+                                suggestion: Some("تأكد من صحة الأمر والمدخل وصلاحيات التنفيذ".to_string()),
+                                line: None,
+                            })),
                         }
                     }
-                    _ => Err(anyhow!("system_with_io expects string arguments")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "نفذ_أمر_بمدخل يتوقع نصين".to_string(),
+                        message_en: "system_with_io expects string arguments".to_string(),
+                        suggestion: Some("استخدم نصين فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "read_file" | "اقرأ_ملف" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("read_file expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "اقرأ_ملف تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "read_file expects 1 argument".to_string(),
+                        suggestion: Some("استخدم نصاً يمثل المسار".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::String(path) => match self.system_executor.read_file(path) {
                         Ok(content) => Ok(Value::String(content)),
-                        Err(e) => Err(anyhow!("Failed to read file: {}", e)),
+                        Err(e) => Err(anyhow!(IqraError {
+                            kind: "فشل قراءة الملف".to_string(),
+                            message_ar: format!("فشل قراءة الملف: {}", e),
+                            message_en: format!("Failed to read file: {}", e),
+                            suggestion: Some("تأكد من صحة المسار وصلاحيات القراءة".to_string()),
+                            line: None,
+                        })),
                     },
-                    _ => Err(anyhow!("read_file expects a string path")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "اقرأ_ملف يتوقع نصاً يمثل المسار".to_string(),
+                        message_en: "read_file expects a string path".to_string(),
+                        suggestion: Some("استخدم نصاً فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "write_file" | "اكتب_ملف" => {
                 if args.len() != 2 {
-                    return Err(anyhow!("write_file expects 2 arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "اكتب_ملف تتوقع وسيطين".to_string(),
+                        message_en: "write_file expects 2 arguments".to_string(),
+                        suggestion: Some("استخدم نصين: المسار والمحتوى".to_string()),
+                        line: None,
+                    }));
                 }
                 match (&args[0], &args[1]) {
                     (Value::String(path), Value::String(content)) => {
                         match self.system_executor.write_file(path, content) {
                             Ok(success) => Ok(Value::Bool(success)),
-                            Err(e) => Err(anyhow!("Failed to write file: {}", e)),
+                            Err(e) => Err(anyhow!(IqraError {
+                                kind: "فشل كتابة الملف".to_string(),
+                                message_ar: format!("فشل كتابة الملف: {}", e),
+                                message_en: format!("Failed to write file: {}", e),
+                                suggestion: Some("تأكد من صحة المسار وصلاحيات الكتابة".to_string()),
+                                line: None,
+                            })),
                         }
                     }
-                    _ => Err(anyhow!("write_file expects string arguments")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "اكتب_ملف يتوقع نصين".to_string(),
+                        message_en: "write_file expects string arguments".to_string(),
+                        suggestion: Some("استخدم نصين فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "list_files" | "قائمة_ملفات" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("list_files expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "قائمة_ملفات تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "list_files expects 1 argument".to_string(),
+                        suggestion: Some("استخدم نصاً يمثل المسار".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::String(path) => match self.system_executor.list_files(path) {
@@ -744,40 +1322,89 @@ impl Runtime {
                                 files.into_iter().map(Value::String).collect();
                             Ok(Value::List(file_values))
                         }
-                        Err(e) => Err(anyhow!("Failed to list files: {}", e)),
+                        Err(e) => Err(anyhow!(IqraError {
+                            kind: "فشل جلب قائمة الملفات".to_string(),
+                            message_ar: format!("فشل جلب قائمة الملفات: {}", e),
+                            message_en: format!("Failed to list files: {}", e),
+                            suggestion: Some("تأكد من صحة المسار وصلاحيات القراءة".to_string()),
+                            line: None,
+                        })),
                     },
-                    _ => Err(anyhow!("list_files expects a string path")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "قائمة_ملفات تتوقع نصاً يمثل المسار".to_string(),
+                        message_en: "list_files expects a string path".to_string(),
+                        suggestion: Some("استخدم نصاً فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "env_var" | "متغير_بيئة" => {
                 if args.len() != 1 {
-                    return Err(anyhow!("env_var expects 1 argument"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "متغير_بيئة تتوقع وسيطاً واحداً".to_string(),
+                        message_en: "env_var expects 1 argument".to_string(),
+                        suggestion: Some("استخدم نصاً يمثل اسم المتغير".to_string()),
+                        line: None,
+                    }));
                 }
                 match &args[0] {
                     Value::String(name) => match self.system_executor.get_env_var(name) {
                         Some(value) => Ok(Value::String(value)),
                         None => Ok(Value::Nil),
                     },
-                    _ => Err(anyhow!("env_var expects a string name")),
+                    _ => Err(anyhow!(IqraError {
+                        kind: "نوع وسيط غير صحيح".to_string(),
+                        message_ar: "متغير_بيئة يتوقع نصاً يمثل اسم المتغير".to_string(),
+                        message_en: "env_var expects a string name".to_string(),
+                        suggestion: Some("استخدم نصاً فقط".to_string()),
+                        line: None,
+                    })),
                 }
             }
 
             "system_info" | "معلومات_النظام" => {
                 if !args.is_empty() {
-                    return Err(anyhow!("system_info expects no arguments"));
+                    return Err(anyhow!(IqraError {
+                        kind: "عدد وسائط غير صحيح".to_string(),
+                        message_ar: "معلومات_النظام لا تتوقع وسائط".to_string(),
+                        message_en: "system_info expects no arguments".to_string(),
+                        suggestion: Some("لا تستخدم وسائط مع هذه الدالة".to_string()),
+                        line: None,
+                    }));
                 }
-                match self.system_executor.system_info() {
-                    Ok(info) => {
-                        let map_values: HashMap<String, Value> =
-                            info.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
-                        Ok(Value::Map(map_values))
+                if let Some(ref cached) = self.system_info_cache {
+                    let map_values: HashMap<String, Value> =
+                        cached.clone().into_iter().map(|(k, v)| (k, Value::String(v))).collect();
+                    Ok(Value::Map(map_values))
+                } else {
+                    match self.system_executor.system_info() {
+                        Ok(info) => {
+                            self.system_info_cache = Some(info.clone());
+                            let map_values: HashMap<String, Value> =
+                                info.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
+                            Ok(Value::Map(map_values))
+                        }
+                        Err(e) => Err(anyhow!(IqraError {
+                            kind: "فشل جلب معلومات النظام".to_string(),
+                            message_ar: format!("فشل جلب معلومات النظام: {}", e),
+                            message_en: format!("Failed to get system info: {}", e),
+                            suggestion: Some("تأكد من صلاحيات النظام".to_string()),
+                            line: None,
+                        })),
                     }
-                    Err(e) => Err(anyhow!("Failed to get system info: {}", e)),
                 }
             }
 
-            _ => Err(anyhow!("Unknown function: {}", name)),
+            _ => Err(anyhow!(IqraError {
+                kind: "دالة غير معرفة".to_string(),
+                message_ar: format!("دالة غير معرفة: {}", name),
+                message_en: format!("Unknown function: {}", name),
+                suggestion: Some("تأكد من كتابة اسم الدالة بشكل صحيح".to_string()),
+                line: None,
+            })),
         }
     }
 }

@@ -1,3 +1,60 @@
+#[test]
+fn test_arabic_try_catch_success() {
+    let mut runtime = Runtime::new();
+    let code = r#"
+    جرب {
+        اطبع("نجاح")
+    } امسك (خطأ) {
+        اطبع(خطأ)
+    }
+    "#;
+    let result = runtime.execute(code).unwrap();
+    assert_eq!(result, Value::Nil);
+}
+
+#[test]
+fn test_arabic_try_catch_error() {
+    let mut runtime = Runtime::new();
+    let code = r#"
+    جرب {
+        اطبع(غير_معرف)
+    } امسك (خطأ) {
+        اطبع(خطأ)
+    }
+    "#;
+    let result = runtime.execute(code).unwrap();
+    // Should run catch block and bind error
+    assert_eq!(result, Value::Nil);
+}
+
+#[test]
+fn test_english_try_catch_success() {
+    let mut runtime = Runtime::new();
+    let code = r#"
+    try {
+        print("success")
+    } catch (error) {
+        print(error)
+    }
+    "#;
+    let result = runtime.execute(code).unwrap();
+    assert_eq!(result, Value::Nil);
+}
+
+#[test]
+fn test_english_try_catch_error() {
+    let mut runtime = Runtime::new();
+    let code = r#"
+    try {
+        print(undefined_var)
+    } catch (error) {
+        print(error)
+    }
+    "#;
+    let result = runtime.execute(code).unwrap();
+    // Should run catch block and bind error
+    assert_eq!(result, Value::Nil);
+}
 use iqra::lang::runtime::{Runtime, SystemExecutor};
 use iqra::lang::value::Value;
 use std::collections::HashMap;

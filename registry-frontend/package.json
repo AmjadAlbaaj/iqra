@@ -1,0 +1,17 @@
+{
+  "name": "iqra-registry-frontend",
+  "version": "0.1.0",
+  "description": "Web frontend for browsing iqra packages (Arabic/English)",
+  "scripts": {
+    "dev": "svelte-kit dev",
+    "build": "svelte-kit build",
+    "preview": "svelte-kit preview"
+  },
+  "dependencies": {
+    "@sveltejs/kit": "^1.0.0",
+    "svelte": "^3.0.0"
+  },
+  "devDependencies": {
+    "vite": "^4.0.0"
+  }
+}
